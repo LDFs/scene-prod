@@ -1,0 +1,14 @@
+{
+  "name": "SceneProd",
+  "version": "1.0.0",
+  "description": "",
+  "scripts": {
+    "scene:editor": "pnpm --filter @scene-prod/editor dev",
+    "scene:server": "pnpm --filter @scene-prod/server dev",
+    "scene:build": "pnpm --filter \"@scene-prod/*\" build && pnpm --filter \"scene-prod-*\" build"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "packageManager": "pnpm@10.33.2"
+}

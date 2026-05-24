@@ -1,0 +1,5 @@
+packages:
+
+  - 'packages/*'  # packages下面的包
+
+  - 'apps/*'  # apps下面的包
