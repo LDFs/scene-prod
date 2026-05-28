@@ -100,7 +100,7 @@
 import { ref, computed, onMounted, nextTick } from 'vue';
 import { getScenes, createScene, deleteScene } from '../services/api';
 import { useRouter } from 'vue-router';
-import type { SceneData } from '@scene-prod/core';
+import type { SceneData } from '@scene-prod/shared';
 import type { Pagination, NewScene } from '../types/scenes';
 
 const router = useRouter();
