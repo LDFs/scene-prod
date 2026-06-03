@@ -46,11 +46,17 @@ async function chatStream(req: FastifyRequest, res: FastifyReply) {
   }
 
   // 接管底层响应流，以 SSE 形式持续推送
+  // res.hijack() 绕过了 Fastify CORS 插件，需手动写入 CORS 头
+  const allowedOrigins = ['http://localhost:5273', 'http://127.0.0.1:5273']
+  const requestOrigin = req.headers.origin ?? ''
+  const corsOrigin = allowedOrigins.includes(requestOrigin) ? requestOrigin : allowedOrigins[0]
   res.hijack()
   res.raw.writeHead(200, {
     'Content-Type': 'text/event-stream; charset=utf-8',
     'Cache-Control': 'no-cache, no-transform',
     Connection: 'keep-alive',
+    'Access-Control-Allow-Origin': corsOrigin,
+    'Access-Control-Allow-Credentials': 'true',
   })
 
   // 客户端断开时中止上游请求

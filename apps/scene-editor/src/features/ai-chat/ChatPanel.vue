@@ -16,11 +16,10 @@
         class="message-row"
         :class="msg.role"
       >
-        <div class="bubble">{{ msg.content }}</div>
-      </div>
-
-      <div v-if="loading" class="message-row assistant">
-        <div class="bubble loading">思考中…</div>
+        <div
+          class="bubble"
+          :class="{ loading: loading && index === messages.length - 1 && !msg.content }"
+        >{{ msg.content || (loading && index === messages.length - 1 ? '思考中…' : '') }}</div>
       </div>
     </div>
 
@@ -30,9 +29,9 @@
         :disabled="loading"
         placeholder="输入消息，Enter 发送，Shift+Enter 换行"
         rows="2"
-        @keydown.enter.exact.prevent="send"
+        @keydown.enter.exact.prevent="sendStream"
       ></textarea>
-      <button class="send-btn" :disabled="loading || !input.trim()" @click="send">
+      <button class="send-btn" :disabled="loading || !input.trim()" @click="sendStream">
         发送
       </button>
     </div>
@@ -41,7 +40,7 @@
 
 <script setup lang="ts">
 import { ref, nextTick } from 'vue'
-import { chatWithAI, type ChatMessage } from '@/services/ai'
+import { chatWithAI, chatWithAIStream, type ChatMessage } from '@/services/ai'
 
 const messages = ref<ChatMessage[]>([])
 const input = ref('')
@@ -74,6 +73,37 @@ async function send() {
   }
   await scrollToBottom()
 }
+
+async function sendStream() {
+  const content = input.value.trim()
+  if (!content || loading.value) return
+
+  messages.value.push({ role: 'user', content })
+  input.value = ''
+  loading.value = true
+  await scrollToBottom()
+
+  // 先占一个空的 assistant 消息，流式追加到这里而不是每次 push 新的
+  messages.value.push({ role: 'assistant', content: '' })
+  const idx = messages.value.length - 1
+
+  await chatWithAIStream(
+    messages.value.slice(0, idx),
+    async (delta) => {
+      messages.value[idx].content += delta
+      await scrollToBottom()
+    },
+    () => { loading.value = false },
+    (message) => {
+      console.error('AI 流式对话失败:', message)
+      messages.value[idx].content = `出错了：${message}`
+      loading.value = false
+    }
+  )
+  loading.value = false
+}
+
+
 
 function clearMessages() {
   messages.value = []
