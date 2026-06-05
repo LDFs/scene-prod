@@ -58,3 +58,90 @@ export const SceneDataSchema = z.object({
   backgroundColor: z.string(),
   ambientIntensity: z.number(),
 })
+
+// ── Scene Command Schemas ──────────────────────────────────────────────────────
+// 与 packages/core/src/commands/CommandFactory.ts 中各 Command 类一一对应。
+// 前端执行器根据 commandType 分派到对应的 Command 类，AI 只需填充这些字段。
+
+const CreateObjectCommandSchema = z.object({
+  commandType: z.literal('create'),
+  // 对应 AddObjectCommand：需要完整构造出 THREE.Mesh
+  objectType: z.enum(['box', 'sphere']),
+  name: z.string(),
+  position: Vec3Schema.default({ x: 0, y: 0, z: 0 }),
+  rotation: Vec3Schema.default({ x: 0, y: 0, z: 0 }), // 单位：弧度
+  scale: Vec3Schema.default({ x: 1, y: 1, z: 1 }),
+  // 材质 —— 对应 MeshStandardMaterial 构造参数
+  color: z.string().default('#ffffff'),             // hex 或 CSS 颜色名
+  roughness: z.number().min(0).max(1).default(0.8),
+  metalness: z.number().min(0).max(1).default(0),
+  opacity: z.number().min(0).max(1).default(1),
+  wireframe: z.boolean().default(false),
+  // BoxGeometry 可选尺寸（默认 1×1×1）
+  width: z.number().positive().optional(),
+  height: z.number().positive().optional(),
+  depth: z.number().positive().optional(),
+  // SphereGeometry 可选参数
+  radius: z.number().positive().optional(),
+})
+
+const DeleteObjectCommandSchema = z.object({
+  commandType: z.literal('delete'),
+  // 对应 DeleteObjectCommand：按名称定位对象
+  name: z.string(),
+})
+
+const TransformObjectCommandSchema = z.object({
+  commandType: z.literal('transform'),
+  // 对应 TransformObjectCommand：executor 负责读取旧状态，AI 只给新状态
+  name: z.string(),
+  position: Vec3Schema.optional(), // 绝对坐标，不填则不改
+  rotation: Vec3Schema.optional(), // 绝对弧度，不填则不改
+  scale: Vec3Schema.optional(),    // 绝对缩放，不填则不改
+})
+
+const ModifyMaterialCommandSchema = z.object({
+  commandType: z.literal('modify_material'),
+  // 对应 MaterialObjectCommand：只列出 AI 常用子集，executor 填充其余字段默认值
+  name: z.string(),
+  color: z.string().optional(),
+  roughness: z.number().min(0).max(1).optional(),
+  metalness: z.number().min(0).max(1).optional(),
+  opacity: z.number().min(0).max(1).optional(),
+  emissiveColor: z.string().optional(),
+  emissiveIntensity: z.number().min(0).optional(),
+  wireframe: z.boolean().optional(),
+  flatShading: z.boolean().optional(),
+  transparent: z.boolean().optional(),
+})
+
+const ModifyPropertyCommandSchema = z.object({
+  commandType: z.literal('modify_property'),
+  // 对应 PropertiyBaseCommand：name/visible
+  name: z.string(),
+  newName: z.string().optional(),
+  visible: z.boolean().optional(),
+})
+
+export const SceneCommandSchema = z.discriminatedUnion('commandType', [
+  CreateObjectCommandSchema,
+  DeleteObjectCommandSchema,
+  TransformObjectCommandSchema,
+  ModifyMaterialCommandSchema,
+  ModifyPropertyCommandSchema,
+])
+
+/** AI 返回的完整结构：自然语言说明 + 命令列表 */
+export const AISceneResponseSchema = z.object({
+  explanation: z.string(),
+  commands: z.array(SceneCommandSchema),
+})
+
+// 从 schema 推导 TypeScript 类型，不重复手写
+export type SceneCommand = z.infer<typeof SceneCommandSchema>
+export type AISceneResponse = z.infer<typeof AISceneResponseSchema>
+export type CreateObjectCommand = z.infer<typeof CreateObjectCommandSchema>
+export type DeleteObjectCommand = z.infer<typeof DeleteObjectCommandSchema>
+export type TransformObjectCommand = z.infer<typeof TransformObjectCommandSchema>
+export type ModifyMaterialCommand = z.infer<typeof ModifyMaterialCommandSchema>
+export type ModifyPropertyCommand = z.infer<typeof ModifyPropertyCommandSchema>

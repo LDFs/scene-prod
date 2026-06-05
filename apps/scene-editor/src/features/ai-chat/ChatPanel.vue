@@ -9,7 +9,9 @@
 
     <div ref="listRef" class="chat-messages">
       <p v-if="messages.length === 0" class="empty-tip">向 AI 描述你的需求，开始对话吧～</p>
-
+      <div v-if="loading && (messages.length === 0 || messages[messages.length - 1].content === '' || messages.length % 2 === 1)" class="assistant message-row">
+        <div class="loading">思考中...</div>
+      </div>
       <div
         v-for="(msg, index) in messages"
         :key="index"
@@ -29,9 +31,9 @@
         :disabled="loading"
         placeholder="输入消息，Enter 发送，Shift+Enter 换行"
         rows="2"
-        @keydown.enter.exact.prevent="sendStream"
+        @keydown.enter.exact.prevent="send"
       ></textarea>
-      <button class="send-btn" :disabled="loading || !input.trim()" @click="sendStream">
+      <button class="send-btn" :disabled="loading || !input.trim()" @click="send">
         发送
       </button>
     </div>
@@ -41,6 +43,18 @@
 <script setup lang="ts">
 import { ref, nextTick } from 'vue'
 import { chatWithAI, chatWithAIStream, type ChatMessage } from '@/services/ai'
+import { useManagerStore } from '@/stores/manager'
+import { buildSceneSystemPrompt } from './scenePrompt'
+import { AISceneResponseSchema } from '@scene-prod/shared/schema'
+
+const managerStore = useManagerStore()
+
+function getSystemMessages(): ChatMessage[] {
+  const objects = managerStore.sceneManager
+    ? [...managerStore.sceneManager.objects]
+    : []
+  return [{ role: 'system', content: buildSceneSystemPrompt(objects) }]
+}
 
 const messages = ref<ChatMessage[]>([])
 const input = ref('')
@@ -63,11 +77,14 @@ async function send() {
   loading.value = true
   await scrollToBottom()
 
-  const result = await chatWithAI(messages.value)
+  const result = await chatWithAI([...getSystemMessages(), ...messages.value])
   loading.value = false
 
   if (result.success) {
-    messages.value.push({ role: 'assistant', content: result.content })
+    const parsed = AISceneResponseSchema.parse(JSON.parse(result.content))
+    // TODO: 将 parsed.commands 传给 SceneCommandExecutor 执行
+    console.log('[AI 指令]', parsed.commands)
+    messages.value.push({ role: 'assistant', content: parsed.explanation })
   } else {
     messages.value.push({ role: 'assistant', content: `出错了：${result.message}` })
   }

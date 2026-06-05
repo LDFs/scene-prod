@@ -1,39 +1,10 @@
 import type { Object3D, Vector3, Euler, Color } from 'three'
+import { z } from 'zod'
+import { SerializedObjectSchema, SceneDataSchema } from '../schema'
 
-export type SerializedObject = {
-  id: string
-  type: string
-  name: string
-  url: string
-  sceneId: string
-  visible: boolean
-  position: { x: number, y: number, z: number }
-  rotation: { x: number, y: number, z: number }
-  scale: { x: number, y: number, z: number }
-  modificationTime?: number
-  modifications?: Record<string, any>
-  geometry?: {
-    type: string
-    parameters: Record<string, any>
-  }
-  material?: Record<string, any>
-}
+export type SerializedObject = z.infer<typeof SerializedObjectSchema>
 
-export type SceneData = {
-  name: string
-  description: string
-  cameraFar: number
-  lastModified: Date
-  objectCount: number
-  environmentUrl: string
-  gisConfig?: Record<string, any> | null
-  objects: SerializedObject[]
-  sceneId: string
-  thumbnail?: String
-  cloudUrls?: string
-  backgroundColor: string
-  ambientIntensity: number
-}
+export type SceneData = z.infer<typeof SceneDataSchema>
 
 export type SceneMetadata = Omit<SceneData, 'objects'>
 
