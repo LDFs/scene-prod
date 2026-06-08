@@ -19,9 +19,9 @@ export const AISceneJsonSchema = z.object({
 })
 
 const Vec3Schema = z.object({
-  x: z.number(),
-  y: z.number(),
-  z: z.number(),
+  x: z.number().optional(),
+  y: z.number().optional(),
+  z: z.number().optional(),
 })
 
 export const SerializedObjectSchema = z.object({

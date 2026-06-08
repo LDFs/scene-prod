@@ -1,8 +1,8 @@
 import * as THREE from 'three'
 import { ActualCommand, AddCommand, Command, DeleteCommand, MaterialCommand, TransformCommand } from './Command'
-import { SceneManager } from '@/SceneManager'
-import { PersistenceManager } from '@/PersistenceManager'
-import { MaterialState, ObjectState, PropertyType, SceneMetadata } from '@scene-prod/shared'
+import { SceneManager } from '../SceneManager'
+import { PersistenceManager } from '../PersistenceManager'
+import { MaterialState, ObjectState, PropertyType, SceneCommand, SceneMetadata } from '@scene-prod/shared'
 
 /**
  * 添加对象指令
@@ -45,7 +45,6 @@ export class DeleteObjectCommand implements DeleteCommand {
     this.sceneManager.removeObjectFromScene(this.object)
   }
 }
-
 
 /**
  * 位置、旋转、缩放修改指令
@@ -193,18 +192,17 @@ export class PropertiyBaseCommand implements ActualCommand {
     return this.newProperty
   }
   execute(): void {
-    if(!this.object) return
+    if (!this.object) return
     this.object.name = this.newProperty.name
     this.object.visible = this.newProperty.visible
   }
   undo(): void {
-    if(!this.object) return
+    if (!this.object) return
     this.object.name = this.oldProperty.name
     this.object.visible = this.oldProperty.visible
-
   }
   redo(): void {
-    if(!this.object) return
+    if (!this.object) return
     this.object.name = this.newProperty.name
     this.object.visible = this.newProperty.visible
   }
@@ -263,5 +261,137 @@ export class SceneSettingCommand implements ActualCommand {
     this.sceneManager.setCameraFar(this.newState.cameraFar)
     this.sceneManager.setAmbientLight(this.newState.backgroundColor, this.newState.ambientIntensity)
     this.newState.environmentUrl && this.sceneManager.loadEnvironment(this.newState.environmentUrl)
+  }
+}
+
+/**
+ * 将 AI 结果生成具体的指令
+ */
+export function fromAICommand(cmd: SceneCommand, sceneManager: SceneManager): ActualCommand | null {
+  switch (cmd.commandType) {
+    case 'create': {
+      let geometry: THREE.BufferGeometry = new THREE.BoxGeometry(cmd.width ?? 1, cmd.height ?? 1, cmd.depth ?? 1)
+      if (cmd.objectType === 'sphere') {
+        geometry = new THREE.SphereGeometry(cmd.radius ?? 1, 24, 24)
+      }
+      const material = new THREE.MeshStandardMaterial({
+        color: cmd.color,
+        roughness: cmd.roughness,
+        metalness: cmd.metalness,
+        opacity: cmd.opacity,
+        wireframe: cmd.wireframe,
+      })
+      const mesh = new THREE.Mesh(geometry, material)
+      mesh.name = cmd.name
+      mesh.position.set(cmd.position?.x ?? 1, cmd.position?.y ?? 1, cmd.position?.z ?? 1)
+      mesh.rotation.set(cmd.rotation?.x ?? 0, cmd.rotation?.y ?? 0, cmd.rotation?.z ?? 0)
+      mesh.scale.set(cmd.scale.x ?? 1, cmd.scale.y ?? 1, cmd.scale.z ?? 1)
+
+      return new AddObjectCommand(sceneManager, mesh)
+    }
+    case 'delete': {
+      const objects = sceneManager.findObjectByName(cmd.name)
+      if (objects.length > 0) {
+        return new DeleteObjectCommand(sceneManager, objects[0])
+      }
+      return null
+    }
+    case 'transform': {
+      const objects = sceneManager.findObjectByName(cmd.name)
+      if (!objects || objects.length === 0) return null
+      const object = objects[0]
+      const oldState: ObjectState = {
+        position: object.position.clone(),
+        rotation: object.rotation.clone(),
+        scale: object.scale.clone(),
+      }
+      const newState: ObjectState = {
+        position: new THREE.Vector3(
+          cmd.position?.x ?? oldState.position.x,
+          cmd.position?.y ?? oldState.position.y,
+          cmd.position?.z ?? oldState.position.z,
+        ),
+        rotation: new THREE.Euler(
+          cmd.rotation?.x ?? oldState.rotation.x,
+          cmd.rotation?.y ?? oldState.rotation.y,
+          cmd.rotation?.z ?? oldState.rotation.z,
+        ),
+        scale: new THREE.Vector3(
+          cmd.scale?.x ?? oldState.scale.x,
+          cmd.scale?.y ?? oldState.scale.y,
+          cmd.scale?.z ?? oldState.scale.z,
+        ),
+      }
+      return new TransformObjectCommand(object, oldState, newState)
+    }
+    case 'modify_material': {
+      const object = sceneManager.getObjectByName(cmd.name)
+      if (!object || !(object instanceof THREE.Mesh) || !object.material) return null
+      const oldMat = object.material as THREE.MeshStandardMaterial
+      const oldState: MaterialState = {
+        color: oldMat.color.clone(),
+        roughness: oldMat.roughness,
+        metalness: oldMat.metalness,
+        emissive: oldMat.emissive.clone(),
+        emissiveIntensity: oldMat.emissiveIntensity,
+        opacity: oldMat.opacity,
+        alphaTest: oldMat.alphaTest,
+        blending: oldMat.blending,
+        side: oldMat.side,
+        transparent: oldMat.transparent,
+        depthTest: oldMat.depthTest,
+        depthWrite: oldMat.depthWrite,
+        vertexColors: oldMat.vertexColors,
+        wireframe: oldMat.wireframe,
+        flatShading: oldMat.flatShading,
+      }
+      const newState: MaterialState = {
+        color: cmd.color ? new THREE.Color(cmd.color) : oldMat.color.clone(),
+        roughness: cmd.roughness ?? oldMat.roughness,
+        metalness: cmd.metalness ?? oldMat.metalness,
+        emissive: cmd.emissiveColor ? new THREE.Color(cmd.emissiveColor) : oldMat.emissive.clone(),
+        emissiveIntensity: cmd.emissiveIntensity ?? oldMat.emissiveIntensity,
+        opacity: cmd.opacity ?? oldMat.opacity,
+        transparent: cmd.transparent ?? oldMat.transparent,
+        wireframe: cmd.wireframe ?? oldMat.wireframe,
+        flatShading: cmd.flatShading ?? oldMat.flatShading,
+        alphaTest: cmd.alphaTest ?? oldMat.alphaTest,
+        blending: cmd.blending ?? oldMat.blending,
+        side: cmd.side ?? oldMat.side,
+        depthTest: cmd.depthTest ?? oldMat.depthTest,
+        depthWrite: cmd.depthWrite ?? oldMat.depthWrite,
+        vertexColors: cmd.vertexColors ?? oldMat.vertexColors,
+      }
+      return new MaterialObjectCommand(object, oldState, newState)
+    }
+    case 'modify_property': {
+      const objects = sceneManager.findObjectByName(cmd.name)
+      if (!objects || objects.length === 0) return null
+      const object = objects[0]
+      const oldProperty: PropertyType = {
+        name: object.name,
+        visible: object.visible,
+      }
+      const newProperty: PropertyType = {
+        name: cmd.newName ?? object.name,
+        visible: cmd.visible ?? object.visible,
+      }
+      return new PropertiyBaseCommand(object, oldProperty, newProperty)
+    }
+  }
+
+  return null
+}
+
+export class BatchCommand implements ActualCommand {
+  constructor(private cmds: ActualCommand[], public label: string) {}
+  execute() {
+    this.cmds.forEach((c) => c.execute())
+  }
+  undo() {
+    ;[...this.cmds].reverse().forEach((c) => c.undo())
+  }
+  redo() {
+    this.cmds.forEach((c) => c.redo())
   }
 }

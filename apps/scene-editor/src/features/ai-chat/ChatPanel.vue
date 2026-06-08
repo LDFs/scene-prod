@@ -2,26 +2,26 @@
   <div class="chat-panel">
     <div class="chat-header">
       <h3>AI 助手</h3>
-      <button class="clear-btn" :disabled="loading || messages.length === 0" @click="clearMessages">
-        清空
-      </button>
+      <button class="clear-btn" :disabled="loading || messages.length === 0" @click="clearMessages">清空</button>
     </div>
 
     <div ref="listRef" class="chat-messages">
       <p v-if="messages.length === 0" class="empty-tip">向 AI 描述你的需求，开始对话吧～</p>
-      <div v-if="loading && (messages.length === 0 || messages[messages.length - 1].content === '' || messages.length % 2 === 1)" class="assistant message-row">
-        <div class="loading">思考中...</div>
+
+      <div v-for="(msg, index) in messages" :key="index" class="message-row" :class="msg.role">
+        <div class="bubble" :class="{ loading: loading && index === messages.length - 1 && !msg.content }">
+          {{ msg.content || (loading && index === messages.length - 1 ? '思考中…' : '') }}
+        </div>
       </div>
+
       <div
-        v-for="(msg, index) in messages"
-        :key="index"
-        class="message-row"
-        :class="msg.role"
+        v-if="
+          loading &&
+          (messages.length === 0 || messages[messages.length - 1].content === '' || messages.length % 2 === 1)
+        "
+        class="assistant message-row"
       >
-        <div
-          class="bubble"
-          :class="{ loading: loading && index === messages.length - 1 && !msg.content }"
-        >{{ msg.content || (loading && index === messages.length - 1 ? '思考中…' : '') }}</div>
+        <div class="loading">思考中...</div>
       </div>
     </div>
 
@@ -33,9 +33,7 @@
         rows="2"
         @keydown.enter.exact.prevent="send"
       ></textarea>
-      <button class="send-btn" :disabled="loading || !input.trim()" @click="send">
-        发送
-      </button>
+      <button class="send-btn" :disabled="loading || !input.trim()" @click="send">发送</button>
     </div>
   </div>
 </template>
@@ -46,13 +44,15 @@ import { chatWithAI, chatWithAIStream, type ChatMessage } from '@/services/ai'
 import { useManagerStore } from '@/stores/manager'
 import { buildSceneSystemPrompt } from './scenePrompt'
 import { AISceneResponseSchema } from '@scene-prod/shared/schema'
+import { SceneCommand } from '@scene-prod/shared'
+import { fromAICommand, ActualCommand, BatchCommand } from '@scene-prod/core'
+import { useHistoryStore } from '@/stores/history'
 
 const managerStore = useManagerStore()
+const historyStore = useHistoryStore()
 
 function getSystemMessages(): ChatMessage[] {
-  const objects = managerStore.sceneManager
-    ? [...managerStore.sceneManager.objects]
-    : []
+  const objects = managerStore.sceneManager ? [...managerStore.sceneManager.objects] : []
   return [{ role: 'system', content: buildSceneSystemPrompt(objects) }]
 }
 
@@ -77,14 +77,45 @@ async function send() {
   loading.value = true
   await scrollToBottom()
 
-  const result = await chatWithAI([...getSystemMessages(), ...messages.value])
+  const result = await chatWithAI([...getSystemMessages(), ...messages.value.filter((m) => !m.skipContext)])
   loading.value = false
 
   if (result.success) {
-    const parsed = AISceneResponseSchema.parse(JSON.parse(result.content))
-    // TODO: 将 parsed.commands 传给 SceneCommandExecutor 执行
-    console.log('[AI 指令]', parsed.commands)
-    messages.value.push({ role: 'assistant', content: parsed.explanation })
+    try {
+      const parsed = AISceneResponseSchema.parse(JSON.parse(result.content))
+      console.log('[AI 指令]', parsed.commands)
+      const failed: string[] = []
+
+      const cmds = parsed.commands
+        .map((cmd) => {
+          const c = fromAICommand(cmd, managerStore.sceneManager!)
+          if(!c) {
+            failed.push(cmd.commandType)
+          }
+          return c
+        })
+        .filter(Boolean) as ActualCommand[]
+      // .filter(Boolean) 过滤掉假植
+
+      if (cmds.length > 0) {
+        historyStore.execute(new BatchCommand(cmds, parsed.explanation))
+      }
+
+      messages.value.push({ role: 'assistant', content: parsed.explanation })
+      if (failed.length > 0) {
+        messages.value.push({
+          role: 'user',
+          content: `[系统提示] 以下指令未能执行（对象不存在或参数有误）：${failed.join(', ')}`,
+          skipContext: false,
+        })
+      }
+    } catch (error: any) {
+      messages.value.push({
+        role: 'assistant',
+        content: `❗执行出错：${error.message}`,
+        skipContext: true,
+      })
+    }
   } else {
     messages.value.push({ role: 'assistant', content: `出错了：${result.message}` })
   }
@@ -110,17 +141,17 @@ async function sendStream() {
       messages.value[idx].content += delta
       await scrollToBottom()
     },
-    () => { loading.value = false },
+    () => {
+      loading.value = false
+    },
     (message) => {
       console.error('AI 流式对话失败:', message)
       messages.value[idx].content = `出错了：${message}`
       loading.value = false
-    }
+    },
   )
   loading.value = false
 }
-
-
 
 function clearMessages() {
   messages.value = []

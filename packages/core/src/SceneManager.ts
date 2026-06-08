@@ -48,8 +48,8 @@ export class SceneManager {
 
   environmentUrl: string | null = null
 
-  private animate = (time: number) => { }
-  _onCanvasClick = (e: MouseEvent) => { }
+  private animate = (time: number) => {}
+  _onCanvasClick = (e: MouseEvent) => {}
 
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas
@@ -91,12 +91,8 @@ export class SceneManager {
     this.controls = orbitControl.getOrbitControls()
 
     // 视图管理器（透视/正交切换）
-    this.viewManager = new ViewManager(
-      this.camera,
-      this.controls,
-      window.innerWidth,
-      window.innerHeight,
-      (view) => this.emit('view-changed', { view }),
+    this.viewManager = new ViewManager(this.camera, this.controls, window.innerWidth, window.innerHeight, (view) =>
+      this.emit('view-changed', { view }),
     )
 
     // 射线检测
@@ -105,11 +101,7 @@ export class SceneManager {
 
     this.objects = new Set<THREE.Object3D>()
 
-    this.statsManager = new StatsManager(
-      this.canvas.parentElement || document.body,
-      'top-right',
-      false
-    )
+    this.statsManager = new StatsManager(this.canvas.parentElement || document.body, 'top-right', false)
     this.triangleStatsManager = new TriangleStatsManager(this.renderer, this.scene)
 
     this._onCanvasClick = this._onCanvasClickFn.bind(this)
@@ -201,8 +193,8 @@ export class SceneManager {
     const rect = this.canvas.getBoundingClientRect()
     // 获取点击的屏幕位置
     const screenPosition = new THREE.Vector2(
-      (e.clientX - rect.left) / rect.width * 2 - 1,
-      -(e.clientY - rect.top) / rect.height * 2 + 1,
+      ((e.clientX - rect.left) / rect.width) * 2 - 1,
+      (-(e.clientY - rect.top) / rect.height) * 2 + 1,
     )
     const raycastTargets = [...this.objects]
     const intersects = this.raycastManager.raycast(screenPosition, this.camera, raycastTargets)
@@ -214,7 +206,7 @@ export class SceneManager {
       worldPosition: null,
       point: null,
       face: null,
-      lnglat: null
+      lnglat: null,
     }
     if (intersects.length > 0) {
       const hit = intersects[0]
@@ -222,7 +214,7 @@ export class SceneManager {
       clickData.worldPosition = {
         x: hit.point.x,
         y: hit.point.y,
-        z: hit.point.z
+        z: hit.point.z,
       }
       clickData.point = hit.point
       clickData.face = hit.face
@@ -237,7 +229,7 @@ export class SceneManager {
         clickData.worldPosition = {
           x: groundPoint.x,
           y: groundPoint.y,
-          z: groundPoint.z
+          z: groundPoint.z,
         }
         clickData.point = groundPoint
         if (this.geoSystem) {
@@ -250,7 +242,7 @@ export class SceneManager {
 
   /**
    * 射线检测物体
-   * @param screenPosition 归一化屏幕坐标 
+   * @param screenPosition 归一化屏幕坐标
    * @param options 选项
    * @returns 交点
    */
@@ -264,7 +256,7 @@ export class SceneManager {
 
   /**
    * 获取鼠标指向的地面上的哪个点
-   * @param screenPosition 归一化屏幕坐标 
+   * @param screenPosition 归一化屏幕坐标
    * @returns 交点
    */
   raycastGround(screenPosition: THREE.Vector2) {
@@ -291,7 +283,6 @@ export class SceneManager {
   isBVHHelperVisible() {
     return this.raycastManager.isBVHHelperVisible()
   }
-
 
   //  ==================== 性能监控 API ====================
 
@@ -325,10 +316,7 @@ export class SceneManager {
 
   //  ======== 对象描边 outlineManager =======
 
-
   //  ====== 对象高亮 highManager =====
-
-
 
   //  ========== three 流程 ================
 
@@ -373,16 +361,21 @@ export class SceneManager {
   loadEnvironment(url: string) {
     return new Promise((resolve, reject) => {
       const loader = new HDRLoader()
-      loader.load(url, (texture) => {
-        texture.mapping = THREE.EquirectangularReflectionMapping
-        this.scene.background = texture
-        this.scene.environment = texture
-        this.environmentUrl = url
-        resolve(texture)
-      }, undefined, (error) => {
-        console.error('加载 HDR 环境贴图失败:', error);
-        reject(error)
-      })
+      loader.load(
+        url,
+        (texture) => {
+          texture.mapping = THREE.EquirectangularReflectionMapping
+          this.scene.background = texture
+          this.scene.environment = texture
+          this.environmentUrl = url
+          resolve(texture)
+        },
+        undefined,
+        (error) => {
+          console.error('加载 HDR 环境贴图失败:', error)
+          reject(error)
+        },
+      )
     })
   }
 
@@ -419,6 +412,19 @@ export class SceneManager {
     this.scene.traverse((child) => {
       if (child.uuid === uuid) {
         found = child
+      }
+    })
+    return found
+  }
+
+  findObjectByName(name: string): Array<THREE.Object3D> {
+    let found: Array<THREE.Object3D> = []
+    this.scene.traverse((child) => {
+      if (child.name === name) {
+        found?.push(child)
+      }
+      if (!child.name && child.uuid === name) {
+        found.push(child)
       }
     })
     return found
@@ -465,12 +471,12 @@ export class SceneManager {
     this.controls.update()
   }
 
-  getCameraView(callback: Function): { position: THREE.Vector3, target: THREE.Vector3 } {
+  getCameraView(callback: Function): { position: THREE.Vector3; target: THREE.Vector3 } {
     const position = this.camera.position.clone()
     const target = this.controls.target.clone()
     const view = {
       position,
-      target
+      target,
     }
     if (callback && typeof callback === 'function') {
       callback(view)
@@ -499,18 +505,27 @@ export class SceneManager {
       const startPosition = this.camera.position.clone()
       const startTarget = this.controls.target.clone()
 
-      new Tween(startPosition, this.tweenGroup).to(position, duration).easing(Easing.Quadratic.Out).onUpdate(() => {
-        this.camera.position.set(startPosition.x, startPosition.y, startPosition.z)
-      }).start()
-      new Tween(startTarget, this.tweenGroup).to(endTarget, duration).easing(Easing.Quadratic.Out).onUpdate(() => {
-        this.controls.target.set(startTarget.x, startTarget.y, startTarget.z)
-        this.controls.update()
-      }).onComplete((() => {
-        if (onComplete && typeof onComplete === 'function') {
-          onComplete()
-        }
-        resolve(true)
-      })).start()
+      new Tween(startPosition, this.tweenGroup)
+        .to(position, duration)
+        .easing(Easing.Quadratic.Out)
+        .onUpdate(() => {
+          this.camera.position.set(startPosition.x, startPosition.y, startPosition.z)
+        })
+        .start()
+      new Tween(startTarget, this.tweenGroup)
+        .to(endTarget, duration)
+        .easing(Easing.Quadratic.Out)
+        .onUpdate(() => {
+          this.controls.target.set(startTarget.x, startTarget.y, startTarget.z)
+          this.controls.update()
+        })
+        .onComplete(() => {
+          if (onComplete && typeof onComplete === 'function') {
+            onComplete()
+          }
+          resolve(true)
+        })
+        .start()
     })
   }
 
@@ -538,7 +553,7 @@ export class SceneManager {
         wireframe: true,
         transparent: true,
         opacity: 0.6,
-        side: THREE.DoubleSide
+        side: THREE.DoubleSide,
       })
       const gridPlane = new THREE.Mesh(geometry, material)
       // 放置到 XZ 平面
@@ -624,9 +639,7 @@ export class SceneManager {
 
   //  ===== GIS =====
 
-
   //  ======== 天气效果 ========
-
 
   //  ========== 视图切换 ================
 
@@ -651,5 +664,4 @@ export class SceneManager {
   isPerspectiveView(): boolean {
     return this.viewManager.isPerspective
   }
-
 }

@@ -6,6 +6,11 @@ export type ChatRole = 'system' | 'user' | 'assistant'
 export interface ChatMessage {
   role: ChatRole
   content: string
+  /**
+   * 是否跳过上下文（即不发给 AI）。用于系统提示等不需要 AI 处理的消息。
+   * true - 仅显示，不发给 AI, false - 显示并发给 AI，默认 false
+   */
+  skipContext?: boolean  
 }
 
 export interface ChatResult {
