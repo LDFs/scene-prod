@@ -7,6 +7,7 @@ import { SceneManager } from './SceneManager'
 import { DBManager } from './DBManager'
 import type { SerializedObject, SceneMetadata } from '@scene-prod/shared'
 import { IEditorAdapter } from './adapter'
+import { getXYZValueWithDefault } from './utils/sceneTools'
 
 /**
  * 序列化、反序列化对象
@@ -29,10 +30,14 @@ export class PersistenceManager {
   private dbManager: DBManager | null = null
   private editorAdapter: IEditorAdapter | null = null
 
-  constructor(sceneManager: SceneManager, options: {
-    dracoPath?: string,
-    dbUrl?: string
-  }, editorAdapter: IEditorAdapter) {
+  constructor(
+    sceneManager: SceneManager,
+    options: {
+      dracoPath?: string
+      dbUrl?: string
+    },
+    editorAdapter: IEditorAdapter,
+  ) {
     this.sceneManager = sceneManager
 
     const dracoLoader = new DRACOLoader()
@@ -55,7 +60,7 @@ export class PersistenceManager {
    * @returns 序列化后的对象
    */
   serializeObject(object: THREE.Object3D): SerializedObject {
-    console.log('序列化的源对象--', object);
+    console.log('序列化的源对象--', object)
     if (object.userData.modelType === 'GLTF') {
       return {
         id: object.uuid,
@@ -102,24 +107,27 @@ export class PersistenceManager {
       model.uuid = data.id
       model.name = data.name
       if (data.visible !== undefined) model.visible = data.visible
-      model.position.set(data.position.x, data.position.y, data.position.z)
-      model.rotation.set(data.rotation.x, data.rotation.y, data.rotation.z)
-      model.scale.set(data.scale.x, data.scale.y, data.scale.z)
+      let { x, y, z } = getXYZValueWithDefault(data.position, 0)
+      model.position.set(x, y, z)
+      ;({ x, y, z } = getXYZValueWithDefault(data.rotation, 0))
+      model.rotation.set(x, y, z)
+      ;({ x, y, z } = getXYZValueWithDefault(data.scale, 1))
+      model.scale.set(x, y, z)
       if (data.modifications) {
         this.applyModifications(model, data.modifications)
       }
       return model
     } else {
-      let geometry;
+      let geometry
       if (data.geometry?.type === 'BoxGeometry') {
-        const p = data.geometry.parameters;
-        geometry = new THREE.BoxGeometry(p.width, p.height, p.depth);
+        const p = data.geometry.parameters
+        geometry = new THREE.BoxGeometry(p.width, p.height, p.depth)
       } else if (data.geometry?.type === 'SphereGeometry') {
-        const p = data.geometry.parameters;
-        geometry = new THREE.SphereGeometry(p.radius, p.widthSegments, p.heightSegments);
+        const p = data.geometry.parameters
+        geometry = new THREE.SphereGeometry(p.radius, p.widthSegments, p.heightSegments)
       } else {
         // 默认几何体
-        geometry = new THREE.BoxGeometry(1, 1, 1);
+        geometry = new THREE.BoxGeometry(1, 1, 1)
       }
       const material = new THREE.MeshStandardMaterial({
         color: data.material?.color || 0xffffff,
@@ -136,16 +144,19 @@ export class PersistenceManager {
         depthWrite: data.material?.depthWrite ?? true,
         vertexColors: data.material?.vertexColors ?? false,
         wireframe: data.material?.wireframe ?? false,
-        flatShading: data.material?.flatShading ?? false
-      });
-      const mesh = new THREE.Mesh(geometry, material);
-      mesh.uuid = data.id;
-      mesh.name = data.name;
-      if (data.visible !== undefined) mesh.visible = data.visible;
-      mesh.position.set(data.position.x, data.position.y, data.position.z);
-      mesh.rotation.set(data.rotation.x, data.rotation.y, data.rotation.z);
-      mesh.scale.set(data.scale.x, data.scale.y, data.scale.z);
-      return mesh;
+        flatShading: data.material?.flatShading ?? false,
+      })
+      const mesh = new THREE.Mesh(geometry, material)
+      mesh.uuid = data.id
+      mesh.name = data.name
+      if (data.visible !== undefined) mesh.visible = data.visible
+      let { x, y, z } = getXYZValueWithDefault(data.position, 0)
+      mesh.position.set(x, y, z)
+      ;({ x, y, z } = getXYZValueWithDefault(data.rotation, 0))
+      mesh.rotation.set(x, y, z)
+      ;({ x, y, z } = getXYZValueWithDefault(data.scale, 1))
+      mesh.scale.set(x, y, z)
+      return mesh
     }
   }
 
@@ -159,28 +170,30 @@ export class PersistenceManager {
       }
     }
     return new Promise((resolve, reject) => {
-      this.gltfLoader.load(url, (gltf) => {
-        gltf.scene.position.set(0, 0, 0)
-        if (gltf.scene.children.length > 0) {
-          gltf.scene.children[0].position.set(0, 0, 0)
-        }
-        const model = gltf.scene
-        model.userData.modelType = 'GLTF'
-        model.userData.modelUrl = url
-        this.modelCache.set(url, model)
-        const cloned = SkeletonUtils.clone(model)
-        if (cloned instanceof THREE.Group) {
-          resolve(cloned)
-        } else {
-          reject(new Error('模型加载失败'))
-        }
-      },
+      this.gltfLoader.load(
+        url,
+        (gltf) => {
+          gltf.scene.position.set(0, 0, 0)
+          if (gltf.scene.children.length > 0) {
+            gltf.scene.children[0].position.set(0, 0, 0)
+          }
+          const model = gltf.scene
+          model.userData.modelType = 'GLTF'
+          model.userData.modelUrl = url
+          this.modelCache.set(url, model)
+          const cloned = SkeletonUtils.clone(model)
+          if (cloned instanceof THREE.Group) {
+            resolve(cloned)
+          } else {
+            reject(new Error('模型加载失败'))
+          }
+        },
         undefined,
         (error) => {
-          const errorMsg = `模型文件不存在或已被删除: ${url}`;
-          console.error('❌', errorMsg, error);
-          reject(new Error(errorMsg));
-        }
+          const errorMsg = `模型文件不存在或已被删除: ${url}`
+          console.error('❌', errorMsg, error)
+          reject(new Error(errorMsg))
+        },
       )
     })
   }
@@ -193,26 +206,29 @@ export class PersistenceManager {
   extractModifications(object: THREE.Object3D): Record<string, any> {
     const modifications: Record<string, any> = {}
     object.traverse((child) => {
-      console.log('child--', child);
+      console.log('child--', child)
       if (child instanceof THREE.Mesh && child !== object) {
-        const hasModifications = child.userData.positionModified ||
-          child.userData.rotationModified || child.userData.scaleModified ||
-          child.userData.visibleModified || child.userData.materialModified
+        const hasModifications =
+          child.userData.positionModified ||
+          child.userData.rotationModified ||
+          child.userData.scaleModified ||
+          child.userData.visibleModified ||
+          child.userData.materialModified
         if (hasModifications) {
           const path = this.getObjectPath(child, object)
-          modifications[path] = {};
+          modifications[path] = {}
 
           if (child.userData.visibleModified) {
-            modifications[path].visible = child.visible;
+            modifications[path].visible = child.visible
           }
           if (child.userData.positionModified) {
-            modifications[path].position = { x: child.position.x, y: child.position.y, z: child.position.z };
+            modifications[path].position = { x: child.position.x, y: child.position.y, z: child.position.z }
           }
           if (child.userData.rotationModified) {
-            modifications[path].rotation = { x: child.rotation.x, y: child.rotation.y, z: child.rotation.z };
+            modifications[path].rotation = { x: child.rotation.x, y: child.rotation.y, z: child.rotation.z }
           }
           if (child.userData.scaleModified) {
-            modifications[path].scale = { x: child.scale.x, y: child.scale.y, z: child.scale.z };
+            modifications[path].scale = { x: child.scale.x, y: child.scale.y, z: child.scale.z }
           }
           if (child.userData.materialModified && child.material) {
             modifications[path].material = {
@@ -231,13 +247,13 @@ export class PersistenceManager {
               depthWrite: child.material.depthWrite,
               vertexColors: child.material.vertexColors,
               wireframe: child.material.wireframe,
-              flatShading: child.material.flatShading
-            };
+              flatShading: child.material.flatShading,
+            }
           }
         }
       }
     })
-    console.log('序列化模型的修改：', modifications);
+    console.log('序列化模型的修改：', modifications)
     return modifications
   }
 
@@ -248,19 +264,19 @@ export class PersistenceManager {
    * @returns 路径
    */
   getObjectPath(object: THREE.Object3D, root: THREE.Object3D): string {
-    const path = [];
-    let current: THREE.Object3D | null = object;
+    const path = []
+    let current: THREE.Object3D | null = object
     while (current && current !== root) {
       if (current.name) {
-        path.unshift(current.name);
+        path.unshift(current.name)
       } else {
         // 如果没有名称，使用索引作为路径的一部分
-        const index = current.parent?.children.indexOf(current) || 0;
-        path.unshift(`child_${index}`);
+        const index = current.parent?.children.indexOf(current) || 0
+        path.unshift(`child_${index}`)
       }
-      current = current.parent || null;
+      current = current.parent || null
     }
-    return path.join('/');
+    return path.join('/')
   }
 
   /**
@@ -269,46 +285,48 @@ export class PersistenceManager {
    * @param modifications 修改的记录
    */
   applyModifications(rootObject: THREE.Object3D, modifications: Record<string, any>) {
-    console.log('反序列化模型的修改--', modifications);
+    console.log('反序列化模型的修改--', modifications)
     for (const [path, mods] of Object.entries(modifications)) {
       const child = this.findObjectByPath(rootObject, path)
       if (child) {
         if (mods.visible !== undefined) {
-          child.visible = mods.visible;
-          child.userData.visibleModified = true;
+          child.visible = mods.visible
+          child.userData.visibleModified = true
         }
         if (mods.position) {
-          child.position.set(mods.position.x, mods.position.y, mods.position.z);
-          child.userData.positionModified = true;
+          child.position.set(mods.position.x, mods.position.y, mods.position.z)
+          child.userData.positionModified = true
         }
         if (mods.rotation) {
-          child.rotation.set(mods.rotation.x, mods.rotation.y, mods.rotation.z);
-          child.userData.rotationModified = true;
+          child.rotation.set(mods.rotation.x, mods.rotation.y, mods.rotation.z)
+          child.userData.rotationModified = true
         }
         if (mods.scale) {
-          child.scale.set(mods.scale.x, mods.scale.y, mods.scale.z);
-          child.userData.scaleModified = true;
+          child.scale.set(mods.scale.x, mods.scale.y, mods.scale.z)
+          child.userData.scaleModified = true
         }
         if (mods.material && child instanceof THREE.Mesh && child.material) {
-          if (mods.material.color !== undefined) child.material.color.set(mods.material.color);
-          if (mods.material.roughness !== undefined) child.material.roughness = mods.material.roughness;
-          if (mods.material.metalness !== undefined) child.material.metalness = mods.material.metalness;
-          if (mods.material.emissive !== undefined && child.material.emissive) child.material.emissive.set(mods.material.emissive);
-          if (mods.material.emissiveIntensity !== undefined) child.material.emissiveIntensity = mods.material.emissiveIntensity;
-          if (mods.material.opacity !== undefined) child.material.opacity = mods.material.opacity;
-          if (mods.material.alphaTest !== undefined) child.material.alphaTest = mods.material.alphaTest;
+          if (mods.material.color !== undefined) child.material.color.set(mods.material.color)
+          if (mods.material.roughness !== undefined) child.material.roughness = mods.material.roughness
+          if (mods.material.metalness !== undefined) child.material.metalness = mods.material.metalness
+          if (mods.material.emissive !== undefined && child.material.emissive)
+            child.material.emissive.set(mods.material.emissive)
+          if (mods.material.emissiveIntensity !== undefined)
+            child.material.emissiveIntensity = mods.material.emissiveIntensity
+          if (mods.material.opacity !== undefined) child.material.opacity = mods.material.opacity
+          if (mods.material.alphaTest !== undefined) child.material.alphaTest = mods.material.alphaTest
 
-          if (mods.material.blending !== undefined) child.material.blending = mods.material.blending;
-          if (mods.material.side !== undefined) child.material.side = mods.material.side;
-          if (mods.material.transparent !== undefined) child.material.transparent = mods.material.transparent;
-          if (mods.material.depthTest !== undefined) child.material.depthTest = mods.material.depthTest;
-          if (mods.material.depthWrite !== undefined) child.material.depthWrite = mods.material.depthWrite;
-          if (mods.material.vertexColors !== undefined) child.material.vertexColors = mods.material.vertexColors;
-          if (mods.material.wireframe !== undefined) child.material.wireframe = mods.material.wireframe;
-          if (mods.material.flatShading !== undefined) child.material.flatShading = mods.material.flatShading;
+          if (mods.material.blending !== undefined) child.material.blending = mods.material.blending
+          if (mods.material.side !== undefined) child.material.side = mods.material.side
+          if (mods.material.transparent !== undefined) child.material.transparent = mods.material.transparent
+          if (mods.material.depthTest !== undefined) child.material.depthTest = mods.material.depthTest
+          if (mods.material.depthWrite !== undefined) child.material.depthWrite = mods.material.depthWrite
+          if (mods.material.vertexColors !== undefined) child.material.vertexColors = mods.material.vertexColors
+          if (mods.material.wireframe !== undefined) child.material.wireframe = mods.material.wireframe
+          if (mods.material.flatShading !== undefined) child.material.flatShading = mods.material.flatShading
 
-          child.material.needsUpdate = true;
-          child.userData.materialModified = true;
+          child.material.needsUpdate = true
+          child.userData.materialModified = true
         }
       }
     }
@@ -328,7 +346,7 @@ export class PersistenceManager {
         const index = parseInt(part.split('_')[1])
         current = current.children?.[index] || null
       } else {
-        current = current.children?.find(child => child.name === part) || null
+        current = current.children?.find((child) => child.name === part) || null
       }
       if (!current) return null
     }
@@ -347,10 +365,10 @@ export class PersistenceManager {
     if (sceneData?.metadata) {
       this.editorAdapter?.setSceneMetadata(sceneData.metadata)
 
-
       if (sceneData.metadata.cameraFar) {
         this.sceneManager?.setCameraFar(sceneData.metadata.cameraFar)
       }
+      this.sceneManager?.setCameraPosition(getXYZValueWithDefault(sceneData.metadata.cameraPosition, 5))
       const envUrl = sceneData.metadata.environmentUrl
       if (envUrl) {
         try {
@@ -364,11 +382,10 @@ export class PersistenceManager {
     const objects = sceneData?.objects || []
     let successCount = 0
     let failedCount = 0
-    const failedObjects: { name: string, type: string, error: string }[] = []
+    const failedObjects: { name: string; type: string; error: string }[] = []
     for (const data of objects) {
       try {
         const object = await this.deserializeObject(data)
-        console.log('加载出来的模型：', object);
         if (object) {
           this.sceneManager?.addObject2Scene(object)
           this.objectMap.set(object.uuid, data.id)
@@ -385,23 +402,25 @@ export class PersistenceManager {
       }
     }
 
-    console.log(`场景加载完成：成功 ${successCount}/${objects.length}`);
-
+    console.log(`场景加载完成：成功 ${successCount}/${objects.length}`)
   }
 
-  async saveScene(storeData: SceneMetadata, callBacks?: {
-    onSuccess?: (message: string) => void,
-    onError?: (message: string) => void,
-  }) {
+  async saveScene(
+    storeData: SceneMetadata,
+    callBacks?: {
+      onSuccess?: (message: string) => void
+      onError?: (message: string) => void
+    },
+  ) {
     if (!this.currentSceneId) {
       console.error('当前未设置场景ID')
       callBacks?.onError?.('当前未设置场景ID')
       return false
     }
-    const serializedObjects = Array.from(this.sceneManager?.objects || []).map(object => this.serializeObject(object))
+    const serializedObjects = Array.from(this.sceneManager?.objects || []).map((object) => this.serializeObject(object))
     const environmentUrl = this.sceneManager?.environmentUrl || null
 
-    console.log('serializedObjects-', serializedObjects);
+    console.log('serializedObjects-', serializedObjects)
     const result = await this.dbManager?.saveScene({
       objects: serializedObjects,
       sceneId: this.currentSceneId,
@@ -415,15 +434,16 @@ export class PersistenceManager {
       thumbnail: '',
       cloudUrls: '',
       backgroundColor: storeData.backgroundColor || '#ffffff',
-      ambientIntensity: storeData.ambientIntensity || 1.0
+      ambientIntensity: storeData.ambientIntensity || 1.0,
+      cameraPosition: this.sceneManager?.getCameraPosition() || { x: 5, y: 5, z: 5 },
     })
-    if(!result) {
+    if (!result) {
       callBacks?.onError?.('保存场景失败')
       return false
     }
 
-    serializedObjects.forEach(obj => {
-      const data = Array.from(this.sceneManager?.objects || []).find(object => object.uuid === obj.id)
+    serializedObjects.forEach((obj) => {
+      const data = Array.from(this.sceneManager?.objects || []).find((object) => object.uuid === obj.id)
       if (data) {
         this.objectMap.set(data.uuid, obj.id)
       }

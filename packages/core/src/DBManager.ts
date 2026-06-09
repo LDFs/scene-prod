@@ -41,7 +41,8 @@ export class DBManager {
             environmentUrl: sceneData.environmentUrl || null,
             gisConfig: sceneData.gisConfig || null,
             backgroundColor: sceneData.backgroundColor || '#ffffff',
-            ambientIntensity: sceneData.ambientIntensity || 1.0
+            ambientIntensity: sceneData.ambientIntensity || 1.0,
+            cameraPosition: sceneData.cameraPosition || { x: 5, y: 5, z: 5 },
           }
         })
       })

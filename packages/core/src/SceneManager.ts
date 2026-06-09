@@ -57,7 +57,6 @@ export class SceneManager {
     this.scene.background = new THREE.Color(0x1a1a2e)
 
     this.camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000)
-    this.camera.position.set(5, 5, 5)
 
     // 设置渲染器，开启 alpha
     this.renderer = new THREE.WebGLRenderer({
@@ -527,6 +526,16 @@ export class SceneManager {
         })
         .start()
     })
+  }
+
+  getCameraPosition(): { x: number; y: number; z: number } {
+    const pos = this.camera.position
+    return { x: pos.x, y: pos.y, z: pos.z }
+  }
+
+  setCameraPosition(position: { x: number; y: number; z: number }) {
+    this.camera.position.set(position.x, position.y, position.z)
+    this.controls.update()
   }
 
   /**

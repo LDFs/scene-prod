@@ -1,5 +1,6 @@
 // TODO: 用 zod 定义与 types.ts 对应的运行时校验 schema
 // zod 主要是用来校验数据结构的，比如传入的参数是否符合预期，避免运行时出错。
+import { cameraPosition } from 'three/tsl'
 import { z } from 'zod'
 
 export const ProjectSchema = z.object({
@@ -57,6 +58,7 @@ export const SceneDataSchema = z.object({
   cloudUrls: z.string().optional(),
   backgroundColor: z.string(),
   ambientIntensity: z.number(),
+  cameraPosition: Vec3Schema.optional(),
 })
 
 // ── Scene Command Schemas ──────────────────────────────────────────────────────
@@ -145,3 +147,4 @@ export type DeleteObjectCommand = z.infer<typeof DeleteObjectCommandSchema>
 export type TransformObjectCommand = z.infer<typeof TransformObjectCommandSchema>
 export type ModifyMaterialCommand = z.infer<typeof ModifyMaterialCommandSchema>
 export type ModifyPropertyCommand = z.infer<typeof ModifyPropertyCommandSchema>
+export type vec3Type = z.infer<typeof Vec3Schema>

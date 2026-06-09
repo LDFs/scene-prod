@@ -122,10 +122,7 @@ onMounted(async () => {
 
   const sceneId = route.params.sceneId as string || 'default'
   await persistenceManager.init(sceneId)
-  console.log('加载场景之后，sceneObjects--', editorCoreStore.sceneObjects);
   sceneManager.setAmbientLight(editorCoreStore.sceneMetadata.backgroundColor, editorCoreStore.sceneMetadata.ambientIntensity)
-
-  sceneManager.fitCameraToScene()
 
   managerStore.init({
     sceneManager,

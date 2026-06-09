@@ -43,6 +43,10 @@
     </div>
 
     <div class="group">
+      <button title="相机自适应" @click="managerStore.sceneManager?.fitCameraToScene()">◉</button>
+    </div>
+
+    <div class="group">
       <button @click="showImportDialog = true" title="批量导入">📥 批量导入</button>
       <button @click="save" class="save-btn">💾 保存</button>
     </div>
