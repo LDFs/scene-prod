@@ -1,8 +1,8 @@
 import * as THREE from 'three'
-import { ActualCommand, AddCommand, Command, DeleteCommand, MaterialCommand, TransformCommand } from './Command'
+import { ActualCommand, AddCommand, DeleteCommand, MaterialCommand, TransformCommand } from './Command'
 import { SceneManager } from '../SceneManager'
-import { PersistenceManager } from '../PersistenceManager'
 import { MaterialState, ObjectState, PropertyType, SceneCommand, SceneMetadata } from '@scene-prod/shared'
+import { findFreePosition } from '../utils/sceneTools'
 
 /**
  * 添加对象指令
@@ -10,12 +10,34 @@ import { MaterialState, ObjectState, PropertyType, SceneCommand, SceneMetadata }
 export class AddObjectCommand implements AddCommand {
   private sceneManager: SceneManager
   private object: THREE.Object3D
-  constructor(sceneManager: SceneManager, object: THREE.Object3D) {
+  private allowOverlap: boolean
+  private isFirstCreate = true
+  adjustmentNote = ''
+
+  constructor(sceneManager: SceneManager, object: THREE.Object3D, allowOverlap = false) {
     this.sceneManager = sceneManager
     this.object = object
+    this.allowOverlap = allowOverlap
   }
   execute(): void {
     this.sceneManager.addObject2Scene(this.object)
+
+    if (!this.isFirstCreate || this.allowOverlap) return
+    const originalPos = this.object.position.clone()
+    findFreePosition(this.object as THREE.Mesh, this.sceneManager.scene, originalPos)
+    this.isFirstCreate = false
+
+    // 检测是否发生了位置修正
+    const finalPos = this.object.position
+    const moved = originalPos.distanceTo(finalPos) > 0.01
+    console.log('--', originalPos, finalPos, moved);
+    if (moved) {
+      const fmt = (n: number) => parseFloat(n.toFixed(2))
+      this.adjustmentNote =
+        `「${this.object.name}」位置已从 ` +
+        `(${fmt(originalPos.x)}, ${fmt(originalPos.y)}, ${fmt(originalPos.z)}) ` +
+        `自动调整至 (${fmt(finalPos.x)}, ${fmt(finalPos.y)}, ${fmt(finalPos.z)}) 以避免重叠`
+    }
   }
   undo(): void {
     this.sceneManager.removeObjectFromScene(this.object)
@@ -287,7 +309,7 @@ export function fromAICommand(cmd: SceneCommand, sceneManager: SceneManager): Ac
       mesh.rotation.set(cmd.rotation?.x ?? 0, cmd.rotation?.y ?? 0, cmd.rotation?.z ?? 0)
       mesh.scale.set(cmd.scale.x ?? 1, cmd.scale.y ?? 1, cmd.scale.z ?? 1)
 
-      return new AddObjectCommand(sceneManager, mesh)
+      return new AddObjectCommand(sceneManager, mesh, cmd.allowOverlap)
     }
     case 'delete': {
       const objects = sceneManager.findObjectByName(cmd.name)
@@ -393,5 +415,13 @@ export class BatchCommand implements ActualCommand {
   }
   redo() {
     this.cmds.forEach((c) => c.redo())
+  }
+
+  // 收集所有 AddObjectCommand 的调整信息
+  getAdjustmentNotes(): string[] {
+    return this.cmds
+      .filter((c): c is AddObjectCommand => c instanceof AddObjectCommand)
+      .map((c) => c.adjustmentNote)
+      .filter(Boolean) as string[]
   }
 }

@@ -89,8 +89,8 @@ async function send() {
       const cmds = parsed.commands
         .map((cmd) => {
           const c = fromAICommand(cmd, managerStore.sceneManager!)
-          if(!c) {
-            failed.push(cmd.commandType)
+          if (!c) {
+            failed.push(cmd.commandType + cmd.name)
           }
           return c
         })
@@ -98,10 +98,16 @@ async function send() {
       // .filter(Boolean) 过滤掉假植
 
       if (cmds.length > 0) {
-        historyStore.execute(new BatchCommand(cmds, parsed.explanation))
-      }
+        const batch = new BatchCommand(cmds, parsed.explanation)
+        historyStore.execute(batch)
 
-      messages.value.push({ role: 'assistant', content: parsed.explanation })
+        // 执行后收集调整信息，有些指令可能需要代码进行检测
+        const notes = batch.getAdjustmentNotes()
+        const explanation = notes.length > 0 ? `${parsed.explanation}\n\n⚠️ ${notes.join('\n')}` : parsed.explanation
+
+        messages.value.push({ role: 'assistant', content: explanation })
+      } else messages.value.push({ role: 'assistant', content: parsed.explanation })
+
       if (failed.length > 0) {
         messages.value.push({
           role: 'user',

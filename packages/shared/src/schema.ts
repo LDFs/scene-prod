@@ -85,6 +85,8 @@ const CreateObjectCommandSchema = z.object({
   depth: z.number().positive().optional(),
   // SphereGeometry 可选参数
   radius: z.number().positive().optional(),
+  // 允许与现有物体重叠（跳过自动位置修正）
+  allowOverlap: z.boolean().default(false),
 })
 
 const DeleteObjectCommandSchema = z.object({
