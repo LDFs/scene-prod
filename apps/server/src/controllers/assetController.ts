@@ -75,8 +75,10 @@ async function uploadAsset(req: FastifyRequest, res: FastifyReply) {
       assetType = 'texture'
     } else if (['.hdr'].includes(ext)) {
       assetType = 'hdri'
-    } else if (['.gltf', '.glb', '.zip'].includes(ext)) {
+    } else if (['.gltf', '.glb', '.zip', 'obj'].includes(ext)) {
       assetType = 'model'
+    } else if(['.mtl'].includes(ext)) {
+      assetType = 'material'
     } else if (['.tileset'].includes(ext)) {
       assetType = 'tileset'
     }

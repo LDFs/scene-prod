@@ -29,7 +29,7 @@
       </div>
 
       <div v-else v-for="model in models" :key="model._id" class="item" draggable="true"
-        @dragstart="onDragStart($event, 'GLTFModel', getAssetUrl(model))" :title="model.originalName">
+        @dragstart="onDragStart($event, model.type, getAssetUrl(model))" :title="model.originalName">
         🎨 {{ model.name }}
       </div>
     </div>

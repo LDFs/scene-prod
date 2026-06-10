@@ -2,6 +2,8 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { DRACOLoader } from 'three/examples/jsm/loaders/DRACOLoader.js';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
+import { OBJLoader } from 'three/examples/jsm/loaders/OBJLoader.js';
+import { MTLLoader } from 'three/examples/jsm/loaders/MTLLoader.js';
 
 
 export class ThumbnailGenerator {
@@ -88,7 +90,47 @@ export class ThumbnailGenerator {
       }
       URL.revokeObjectURL(url)
     }
+  }
 
+  async generateWithObj(objFile: File, mtlFile: File|null): Promise<Blob | null> {
+    const url = URL.createObjectURL(objFile)
+    let model: THREE.Object3D | null = null
+    try {
+      if(mtlFile) {
+        const mtlUrl = URL.createObjectURL(mtlFile);
+        model = await new Promise<THREE.Object3D>((resolve, reject) => {
+          const mtlLoader = new MTLLoader()
+          mtlLoader.load(mtlUrl, (materials) => {
+            materials.preload()
+            const objLoader = new OBJLoader()
+            objLoader.setMaterials(materials)
+            objLoader.load(URL.createObjectURL(objFile), resolve, undefined, reject)
+          }, undefined, reject)
+        })
+      }else {
+        model = await new Promise<THREE.Object3D>((resolve, reject) => {
+          new OBJLoader().load(URL.createObjectURL(objFile), resolve, undefined, reject)
+        })
+      }
+      this.scene.add(model)
+      this.fitCameraToObject(model)
+      this.renderer.render(this.scene, this.camera)
+
+      // 现在这个 return 才能正确从 generateWithObj 返回
+      return new Promise((resolve) => {
+        this.renderer.domElement.toBlob((blob) => resolve(blob), 'image/png', 0.85)
+      })
+    }catch(error) {
+      console.error('生成缩略图失败:', error)
+      return null
+    } finally {
+      // 深度清理资源
+      if (model) {
+        this.scene.remove(model)
+        this.cleanupModel(model); // 彻底释放显存
+      }
+      URL.revokeObjectURL(url)
+    }
   }
 
   /**

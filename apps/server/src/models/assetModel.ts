@@ -17,7 +17,7 @@ const AssetSchema = new mongoose.Schema<Asset>({
   type: {
     type: String,
     required: true,
-    enum: ['model', 'texture', 'hdri', 'effect', 'tileset'], // 资产类型 (新增 tileset)
+    enum: ['model', 'texture', 'hdri', 'effect', 'tileset', 'material'], // 资产类型 (新增 tileset)
     default: 'model'
   },
   format: {

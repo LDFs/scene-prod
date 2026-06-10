@@ -2,6 +2,8 @@
 import * as THREE from 'three'
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
 import { DRACOLoader } from 'three/examples/jsm/loaders/DRACOLoader.js'
+import { OBJLoader } from 'three/examples/jsm/loaders/OBJLoader.js'
+import { MTLLoader } from 'three/examples/jsm/loaders/MTLLoader.js'
 import * as SkeletonUtils from 'three/examples/jsm/utils/SkeletonUtils.js'
 import { SceneManager } from './SceneManager'
 import { DBManager } from './DBManager'
@@ -195,6 +197,22 @@ export class PersistenceManager {
           reject(new Error(errorMsg))
         },
       )
+    })
+  }
+
+  loadModel(url: string): Promise<THREE.Group> {
+    if (!url.endsWith('.obj')) return Promise.reject('模型类型不支持')
+    return new Promise((resolve, reject) => {
+      const objLoader = new OBJLoader()
+      objLoader.load(url, (object) => {
+        this.modelCache.set(url, object)
+        const cloned = SkeletonUtils.clone(object)
+        if (cloned instanceof THREE.Group) {
+          resolve(cloned)
+        } else {
+          reject(new Error('模型加载失败'))
+        }
+      })
     })
   }
 

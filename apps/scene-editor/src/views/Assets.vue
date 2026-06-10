@@ -6,7 +6,7 @@
       <button class="upload-btn" @click="triggerFileInput">
         <span>📤</span> 上传资产
       </button>
-      <input ref="fileInput" type="file" accept=".gltf,.glb,.jpg,.jpeg,.png,.hdr,.exr" @change="handleFileSelect"
+      <input ref="fileInput" type="file" multiple accept=".gltf,.glb,.jpg,.jpeg,.png,.hdr,.exr, .obj, .mtl, .zip" @change="handleFileSelect"
         style="display: none" />
     </div>
 
@@ -94,10 +94,23 @@ const triggerFileInput = () => {
 const setFilter = (filter: string | null) => {
   currentFilter.value = filter;
 };
-
+/**
+ * 支持选择多个文件后，要怎么处理？
+ * 循环，每个文件按之前的处理逻辑
+ * 对于 obj mtl 文件，判断是否有同名的文件，有的话就把材质加载到模型上，否则就不加。然后正常上传
+ * TODO: .zip文件要如何处理？
+ */
 let thumbnailGenerator: ThumbnailGenerator | null = null
 const handleFileSelect = async (event: Event) => {
-  const file = (event.target as HTMLInputElement).files?.[0];
+  const files = (event.target as HTMLInputElement).files;
+  if(!files || files.length === 0) return 
+
+  for(let i = 0; i < files.length; i++){
+    handleOneFile(files[i], files)
+  }
+};
+
+const handleOneFile = async (file: File, files: FileList) => {
   if (!file) {
     return
   }
@@ -113,6 +126,24 @@ const handleFileSelect = async (event: Event) => {
           thumbnailGenerator = new ThumbnailGenerator(100, 100)
         }
         thumbnail = await thumbnailGenerator.generate(file)
+      } catch (error) {
+        console.error('生成缩略图失败:', error)
+      }
+    }else if(['obj'].includes(ext)) {
+      // 判断是否有同名的 mtl 文件
+      let sameNameMtl = null
+      let objName = file.name.slice(0, file.name.lastIndexOf('.'))
+      for(let f of files) {
+        if(f.name.slice(0, file.name.lastIndexOf('.')) === objName) {
+          sameNameMtl = f
+        }
+      }
+      uploadStatus.value = '正在生成缩略图...'
+      try {
+        if (!thumbnailGenerator) {
+          thumbnailGenerator = new ThumbnailGenerator(100, 100)
+        }
+        thumbnail = await thumbnailGenerator.generateWithObj(file, sameNameMtl)
       } catch (error) {
         console.error('生成缩略图失败:', error)
       }
@@ -132,8 +163,7 @@ const handleFileSelect = async (event: Event) => {
   } finally {
     uploading.value = false
   }
-
-};
+}
 
 async function loadAssets() {
   const result = await getAssets(currentFilter.value ?? '')

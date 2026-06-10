@@ -77,8 +77,18 @@ const onDrop = async (event: DragEvent) => {
       console.error('加载模型失败:', error)
       return
     }
-  } else if (type === 'Tileset') {
-
+  } else if (type === 'model') {
+    const url = event.dataTransfer?.getData('url')
+    try{
+      object = await persistenceManager?.loadModel(url as string)
+      const dropPosition = getDropPosition(event)
+      if (dropPosition) {
+        object?.position.copy(dropPosition)
+      }
+    }catch(error) {
+      console.error('加载模型失败:', error)
+      return
+    }
   } else {
     let geometry: THREE.BufferGeometry | null = null, material: THREE.Material | null = null
     if (type === 'Box') {
