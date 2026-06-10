@@ -61,7 +61,7 @@ export class GhostCameraControl extends BaseCameraControl {
   enable(options: Record<string, any>): void {
     super.enable(options)
 
-    this.pointerLockEnabled = options.pointerLock ?? false
+    this.pointerLockEnabled = options?.pointerLock ?? false
     // 从相机当前朝向初始化欧拉角
     this.euler.setFromQuaternion(this.camera.quaternion)
     document.addEventListener('keydown', this._onKeyDown)

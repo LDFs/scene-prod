@@ -46,6 +46,15 @@
       <button title="相机自适应" @click="managerStore.sceneManager?.fitCameraToScene()">◉</button>
     </div>
 
+    <div class="group view-group">
+      <span class="group-label" title="切换相机模式">⨮</span>
+      <select class="view-select" :value="currentMode" @change="onCameraChange">
+        <option v-for="opt in CAMERA_MODE" :key="opt.value" :value="opt.value">
+          {{ opt.label }}
+        </option>
+      </select>
+    </div>
+
     <div class="group">
       <button @click="showImportDialog = true" title="批量导入">📥 批量导入</button>
       <button @click="save" class="save-btn">💾 保存</button>
@@ -109,6 +118,17 @@ const toggleAxes = () => {
 const setMode = (mode: TransformControlsMode) => {
   managerStore.transformController?.setMode(mode);
 }
+
+const CAMERA_MODE: { value: 'orbit' | 'ghost'; label: string }[] = [
+  { value: 'orbit', label: '一般模式' },
+  { value: 'ghost', label: '巡游模式' },
+]
+const currentMode = computed(() => managerStore.sceneManager?.getControlMode() ?? 'orbit')
+const onCameraChange = (e: Event) => {
+  const view = (e.target as HTMLSelectElement).value as ViewPreset
+  managerStore.sceneManager?.setControlMode(view)
+}
+
 const undo = () => {
   historyStore.undo();
 }
