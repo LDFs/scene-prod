@@ -42,6 +42,22 @@ export async function getAssets(type: string): Promise<{ success: boolean, messa
   }
 }
 
+export async function getAssetByName(type: string, name: String): Promise<{ success: boolean, message: string, asset: AssetWithId|null }> {
+  try {
+    const url = `${ASSET_BASE_URL}/get-by-name?type=${type}&name=${name}`;
+    const response = await fetch(url)
+    const data = await response.json()
+    return data
+  } catch (error) {
+    console.error('获取资产失败:', error)
+    return {
+      success: false,
+      message: '获取资产失败',
+      asset: null
+    }
+  }
+}
+
 export async function deleteAsset(id: string): Promise<{ success: boolean, message: string }> {
   try {
     const response = await fetch(`${ASSET_BASE_URL}/delete?id=${id}`, {

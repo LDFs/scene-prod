@@ -7,7 +7,7 @@ import { MTLLoader } from 'three/examples/jsm/loaders/MTLLoader.js'
 import * as SkeletonUtils from 'three/examples/jsm/utils/SkeletonUtils.js'
 import { SceneManager } from './SceneManager'
 import { DBManager } from './DBManager'
-import type { SerializedObject, SceneMetadata } from '@scene-prod/shared'
+import type { SerializedObject, SceneMetadata, Asset } from '@scene-prod/shared'
 import { IEditorAdapter } from './adapter'
 import { getXYZValueWithDefault } from './utils/sceneTools'
 
@@ -200,19 +200,37 @@ export class PersistenceManager {
     })
   }
 
-  loadModel(url: string): Promise<THREE.Group> {
+  async loadModel(url: string, material: Asset|null): Promise<THREE.Group> {
     if (!url.endsWith('.obj')) return Promise.reject('模型类型不支持')
-    return new Promise((resolve, reject) => {
-      const objLoader = new OBJLoader()
-      objLoader.load(url, (object) => {
-        this.modelCache.set(url, object)
-        const cloned = SkeletonUtils.clone(object)
-        if (cloned instanceof THREE.Group) {
-          resolve(cloned)
-        } else {
-          reject(new Error('模型加载失败'))
-        }
+    let model: THREE.Object3D | null = null
+    if (material) {
+      model = await new Promise<THREE.Object3D>((resolve, reject) => {
+        const mtlLoader = new MTLLoader()
+        mtlLoader.load(
+          material.url!,
+          (materials) => {
+            materials.preload()
+            const objLoader = new OBJLoader()
+            objLoader.setMaterials(materials)
+            objLoader.load(url, resolve, undefined, reject)
+          },
+          undefined,
+          reject,
+        )
       })
+    } else {
+      model = await new Promise<THREE.Object3D>((resolve, reject) => {
+        new OBJLoader().load(url, resolve, undefined, reject)
+      })
+    }
+    model.userData.isModelRoot = true  // 标记根节点
+    return new Promise((resolve, reject) => {
+      const cloned = SkeletonUtils.clone(model)
+      if (cloned instanceof THREE.Group) {
+        resolve(cloned)
+      } else {
+        reject(new Error('模型加载失败'))
+      }
     })
   }
 

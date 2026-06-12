@@ -29,7 +29,7 @@
       </div>
 
       <div v-else v-for="model in models" :key="model._id" class="item" draggable="true"
-        @dragstart="onDragStart($event, model.type, getAssetUrl(model))" :title="model.originalName">
+        @dragstart="onDragStart($event, model.type, model)" :title="model.originalName">
         🎨 {{ model.name }}
       </div>
     </div>
@@ -106,12 +106,14 @@ const loadAssets = async () => {
     window.dispatchEvent(new CustomEvent('library-loaded'));
   }
 }
-const onDragStart = (event: DragEvent, type: string, url: string='') => {
+const onDragStart = (event: DragEvent, type: string, model: AssetWithId) => {
   event.dataTransfer?.setData('type', type);
+  const url = getAssetUrl(model)
   if (url) {
     // 'url'是 DataTransfer API 中的保留格式名，它的格式需要为合法的绝对URI(以http:// 或 https:// 等开头)，否则浏览器会认为这不是合法的URI，会默认丢弃这个值
     // 如果不想被默认丢弃，可以使用其他的格式名，如 'modelUrl'
     event.dataTransfer?.setData('url', url);
+    event.dataTransfer?.setData('name', model.name);
   }
 }
 const getAssetUrl = (asset: AssetWithId) => {

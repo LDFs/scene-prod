@@ -134,6 +134,26 @@ async function getAssets(req: FastifyRequest, res: FastifyReply) {
   }
 }
 
+/**
+ * 根据名称和类型来获取模型或材质
+ */
+async function getAssetByName(req: FastifyRequest, res: FastifyReply) {
+  try {
+    const {type="model", name} = req.query as {type: string, name: string}
+    if(!name) return res.status(400).send({success: false, message: '未给出名称 name'})
+    const filter: any = {type, name}
+    const asset = await AssetModel.findOne(filter)
+    return res.status(200).send({
+      success: true,
+      asset,
+      message: "获取成功"
+    })
+  }catch(error) {
+    req.log.error(error)
+    return res.status(500).send({ success: false, message: '获取资产失败' })
+  }
+}
+
 async function getAssetById(req: FastifyRequest, res: FastifyReply) {
   try {
     const { id } = req.query as { id: string }
@@ -269,4 +289,4 @@ async function downloadAsset(req: FastifyRequest, res: FastifyReply) {
 
 
 
-export { uploadAsset, getAssets, getAssetById, deleteAsset, downloadAsset }
+export { uploadAsset, getAssets, getAssetById, deleteAsset, downloadAsset, getAssetByName }

@@ -15,6 +15,7 @@ import { useEditorCoreStore } from '@/stores/editorCore'
 import { useManagerStore } from '@/stores/manager'
 import { EditorStoreAdapter } from '@/adapters/EditorStoreAdapter'
 import { useHistoryStore } from '@/stores/history'
+import { getAssetByName, getModelUrl } from '@/services/asset'
 
 const route = useRoute()
 const container = ref<HTMLDivElement | null>(null)
@@ -34,8 +35,8 @@ const getDropPosition = (event: DragEvent) => {
   if (!rect) return null
   // 计算鼠标的位置在 canvas 中的归一化屏幕坐标
   const screenPos = new THREE.Vector2(
-    (event.clientX - rect.left) / rect.width * 2 - 1,
-    -(event.clientY - rect.top) / rect.height * 2 + 1,
+    ((event.clientX - rect.left) / rect.width) * 2 - 1,
+    (-(event.clientY - rect.top) / rect.height) * 2 + 1,
   )
 
   // 射线检测物体
@@ -79,18 +80,24 @@ const onDrop = async (event: DragEvent) => {
     }
   } else if (type === 'model') {
     const url = event.dataTransfer?.getData('url')
-    try{
-      object = await persistenceManager?.loadModel(url as string)
+    // 查看这个 obj 模型对应的 mtl 文件
+    const {asset: material} = await getAssetByName('material', event.dataTransfer?.getData('name')??'')
+    try {
+      if(material) {
+        material.url = getModelUrl(material)
+      }
+      object = await persistenceManager?.loadModel(url as string, material)
       const dropPosition = getDropPosition(event)
       if (dropPosition) {
         object?.position.copy(dropPosition)
       }
-    }catch(error) {
+    } catch (error) {
       console.error('加载模型失败:', error)
       return
     }
   } else {
-    let geometry: THREE.BufferGeometry | null = null, material: THREE.Material | null = null
+    let geometry: THREE.BufferGeometry | null = null,
+      material: THREE.Material | null = null
     if (type === 'Box') {
       geometry = new THREE.BoxGeometry(1, 1, 1)
       material = new THREE.MeshStandardMaterial({ color: 0x00ff00 })
@@ -116,9 +123,13 @@ const onDrop = async (event: DragEvent) => {
 
 onMounted(async () => {
   sceneManager = new SceneManager(canvas.value as HTMLCanvasElement)
-  persistenceManager = new PersistenceManager(sceneManager, {
-    dbUrl: API_BASE_URL
-  }, editorAdapter)
+  persistenceManager = new PersistenceManager(
+    sceneManager,
+    {
+      dbUrl: API_BASE_URL,
+    },
+    editorAdapter,
+  )
 
   transformController = new TransformController(sceneManager, persistenceManager, (cmd) => historyStore.execute(cmd))
   picker = new Picker(sceneManager, transformController, {
@@ -130,9 +141,12 @@ onMounted(async () => {
     },
   })
 
-  const sceneId = route.params.sceneId as string || 'default'
+  const sceneId = (route.params.sceneId as string) || 'default'
   await persistenceManager.init(sceneId)
-  sceneManager.setAmbientLight(editorCoreStore.sceneMetadata.backgroundColor, editorCoreStore.sceneMetadata.ambientIntensity)
+  sceneManager.setAmbientLight(
+    editorCoreStore.sceneMetadata.backgroundColor,
+    editorCoreStore.sceneMetadata.ambientIntensity,
+  )
 
   managerStore.init({
     sceneManager,
@@ -166,8 +180,6 @@ onMounted(async () => {
 onBeforeUnmount(() => {
   managerStore.reset()
 })
-
-
 </script>
 
 <style scoped>
