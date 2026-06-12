@@ -37,9 +37,21 @@ export class Picker {
 
     if (intersects.length > 0) {
       const selectedObject = intersects[0].object
-      this.callbackObj.selectObject(selectedObject)
+
+      // 向上找到根节点
+      const rootObj = this.getModelRoot(selectedObject)
+
+      this.callbackObj.selectObject(rootObj)
     } else {
       this.callbackObj.clearSelection()
     }
+  }
+
+  private getModelRoot(object: THREE.Object3D): THREE.Object3D {
+    let current = object
+    while (current.parent && !current.userData.isModelRoot) {
+      current = current.parent
+    }
+    return current
   }
 }
