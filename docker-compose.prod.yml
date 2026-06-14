@@ -1,0 +1,48 @@
+# 生产覆盖层：显式指定才生效。
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
+# 与本地的区别：数据服务不暴露端口（仅内网）、加密码、限资源，并把 server 也容器化。
+# 服务之间通过“服务名”互访（redis / mongo），不再走 localhost。
+name: scene-prod
+
+services:
+  redis:
+    # 生产开启密码；REDIS_PASSWORD 未设置时直接报错，避免裸奔
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD:?set REDIS_PASSWORD}
+    deploy:
+      resources:
+        limits:
+          memory: 512m
+
+  mongo:
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_USER:?set MONGO_USER}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_PASSWORD:?set MONGO_PASSWORD}
+    deploy:
+      resources:
+        limits:
+          memory: 1g
+
+  server:
+    build:
+      context: . # 注意：上下文是仓库根目录（monorepo 需要 workspace 依赖）
+      dockerfile: apps/server/Dockerfile
+    container_name: scene-prod-server
+    depends_on:
+      redis:
+        condition: service_healthy
+      mongo:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      PORT: 3100
+      # 容器内用服务名访问，端口是容器内端口（27017 / 6379，不是宿主机映射的那个）
+      MONGODB_URL: mongodb://${MONGO_USER}:${MONGO_PASSWORD}@mongo:27017/scene-prod?authSource=admin
+      REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379
+    ports:
+      - '3100:3100' # 只把对外的 HTTP 服务暴露出去
+    volumes:
+      - uploads-data:/app/apps/server/uploads # 上传文件持久化
+    restart: unless-stopped
+
+volumes:
+  uploads-data:
