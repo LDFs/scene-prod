@@ -1,0 +1,34 @@
+# 基座文件：只定义服务“是什么”，不暴露端口、不放密码。
+# - 本地：`docker compose up -d` 会自动叠加 docker-compose.override.yml（暴露端口给宿主机）
+# - 生产：`docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d`
+name: scene-prod
+
+services:
+  redis:
+    image: redis:7-alpine
+    container_name: scene-prod-redis
+    command: redis-server --appendonly yes # 开启 AOF 持久化（bull 队列数据更安全）
+    volumes:
+      - redis-data:/data
+    restart: unless-stopped
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  mongo:
+    image: mongo:7
+    container_name: scene-prod-mongo
+    volumes:
+      - mongo-data:/data/db
+    restart: unless-stopped
+    healthcheck:
+      test: ['CMD', 'mongosh', '--quiet', '--eval', "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  redis-data:
+  mongo-data:

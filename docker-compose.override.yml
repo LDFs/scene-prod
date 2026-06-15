@@ -1,0 +1,13 @@
+# 本地开发覆盖层：`docker compose up` 时被自动合并（无需 -f 指定）。
+# 作用：把数据服务的端口映射到宿主机，让你在主机上直接 `pnpm scene:server` 连得上。
+# 注意 redis 用 6380，避开已被另一个项目占用的 6379。
+name: scene-prod
+
+services:
+  redis:
+    ports:
+      - '6380:6379' # 宿主机 6380 → 容器内 6379
+
+  mongo:
+    ports:
+      - '27017:27017'
