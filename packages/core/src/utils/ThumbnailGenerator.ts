@@ -104,12 +104,12 @@ export class ThumbnailGenerator {
             materials.preload()
             const objLoader = new OBJLoader()
             objLoader.setMaterials(materials)
-            objLoader.load(URL.createObjectURL(objFile), resolve, undefined, reject)
+            objLoader.load(url, resolve, undefined, reject)
           }, undefined, reject)
         })
       }else {
         model = await new Promise<THREE.Object3D>((resolve, reject) => {
-          new OBJLoader().load(URL.createObjectURL(objFile), resolve, undefined, reject)
+          new OBJLoader().load(url, resolve, undefined, reject)
         })
       }
       this.scene.add(model)
