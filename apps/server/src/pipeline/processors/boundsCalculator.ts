@@ -1,7 +1,7 @@
 import { ProcessAssetType } from '../type'
 import { createNodeIO } from '../utils/ioUtil'
 
-async function calculateBounds(context: ProcessAssetType) {
+export async function calculateBounds(context: ProcessAssetType) {
   const io = await createNodeIO()
 
   try {
