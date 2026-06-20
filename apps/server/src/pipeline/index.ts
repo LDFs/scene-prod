@@ -67,7 +67,7 @@ assetQueue.process('process', async (job) => {
     await AssetModel.findByIdAndUpdate(assetId, {
       processingStatus: 'ready',
       processedFiles: {
-        compressed: context.compressedPath,
+        compressed: '/' + context.compressedPath.replace(/\\/g, '/').replace(/^\/+/, ''),
         lod0: context.lods ? context.lods[0] : null,
         lod1: context.lods ? context.lods[1] : null,
         lod2: context.lods ? context.lods[2] : null,
@@ -76,6 +76,7 @@ assetQueue.process('process', async (job) => {
       bounds: context.bounds,
       stats: context.stats,
     })
+    console.log("[保存到服务器路径]：", context.compressedPath)
     return { success: true, assetId }
   } catch (error: any) {
     console.error(`[Pipeline] 处理失败: ${assetId}`, error)

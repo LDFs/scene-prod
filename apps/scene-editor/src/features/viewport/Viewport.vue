@@ -10,7 +10,7 @@ import { onMounted, onBeforeUnmount, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import * as THREE from 'three'
 import { API_BASE_URL } from '@root/config.ts'
-import { SceneManager, PersistenceManager, TransformController, Picker } from '@scene-prod/core'
+import { SceneManager, PersistenceManager, TransformController, Picker, AddObjectCommand } from '@scene-prod/core'
 import { useEditorCoreStore } from '@/stores/editorCore'
 import { useManagerStore } from '@/stores/manager'
 import { EditorStoreAdapter } from '@/adapters/EditorStoreAdapter'
@@ -66,7 +66,7 @@ const onDrop = async (event: DragEvent) => {
 
   let object
 
-  if (type === 'GLTFModel') {
+  if (type === 'model') {
     const url = event.dataTransfer?.getData('url')
     try {
       object = await persistenceManager?.loadGLTFModel(url as string)
@@ -78,7 +78,7 @@ const onDrop = async (event: DragEvent) => {
       console.error('加载模型失败:', error)
       return
     }
-  } else if (type === 'model') {
+  } else if (type === 'obj') {
     const url = event.dataTransfer?.getData('url')
     // 查看这个 obj 模型对应的 mtl 文件
     const {asset: material} = await getAssetByName('material', event.dataTransfer?.getData('name')??'')
@@ -111,12 +111,16 @@ const onDrop = async (event: DragEvent) => {
       if (dropPosition) {
         object?.position.copy(dropPosition)
         object.position.y += 0.5 // 基础几何体默认在地面以上0.5米
+        object.userData.isModelRoot = true  // 标记根节点
       }
     }
   }
   if (object) {
     // 之后通过 command 来控制添加、撤销等操作
-    sceneManager?.addObject2Scene(object)
+    const addCommand = new AddObjectCommand(sceneManager!, object, true)
+    historyStore.execute(addCommand)
+    // sceneManager?.addObject2Scene(object)
+    // editorCoreStore.notifyTreeUpdate()
     // editorCoreStore.addObject(object)
   }
 }

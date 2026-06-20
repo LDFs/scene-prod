@@ -182,6 +182,7 @@ export class PersistenceManager {
           const model = gltf.scene
           model.userData.modelType = 'GLTF'
           model.userData.modelUrl = url
+          model.userData.isModelRoot = true  // 标记根节点
           this.modelCache.set(url, model)
           const cloned = SkeletonUtils.clone(model)
           if (cloned instanceof THREE.Group) {

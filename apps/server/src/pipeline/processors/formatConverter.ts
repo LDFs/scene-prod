@@ -20,7 +20,7 @@ export async function formatConvert(context: ProcessAssetType) {
   }
 
   const baseName = path.basename(context.inputPath, ext)
-  const outputDir = 'uploads/processed/models'
+  const outputDir = '/uploads/processed/models'
   // 相对路径用于数据库存储
   const relativeOutputPath = path.join(outputDir, `${context.assetId}_${baseName}.glb`)
 
@@ -43,7 +43,7 @@ export async function formatConvert(context: ProcessAssetType) {
       // fbx2gltf 使用 Autodesk 官方 FBX SDK，精度最高
       // --binary 输出 .glb 单文件，--khr-materials-unlit 可选
       await execAsync(`npx fbx2gltf --binary --input "${absoluteInputPath}" --output "${outputPath}"`)
-    } else if (ext === 'obj') {
+    } else if (ext === '.obj') {
       // OBJ 转换 - 需要 obj2gltf
       console.log('[FormatConverter] 使用 obj2gltf 转换 OBJ')
       await execAsync(`npx obj2gltf -i "${absoluteInputPath}" -o "${absoluteOutputPath}"`)

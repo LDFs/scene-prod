@@ -49,7 +49,7 @@
       </div>
 
       <div v-else v-for="env in environments" :key="env._id" class="item" draggable="true"
-        @dragstart="onDragStart($event, 'Environment', getAssetUrl(env))" :title="env.originalName">
+        @dragstart="onDragStart($event, 'Environment', env)" :title="env.originalName">
         🌅 {{ env.name }}
       </div>
     </div>
@@ -70,7 +70,7 @@
       </div>
 
       <div v-else v-for="tileset in tilesets" :key="tileset._id" class="item" draggable="true"
-        @dragstart="onDragStart($event, 'Tileset', tileset.tilesetUrl)" :title="tileset.originalName">
+        @dragstart="onDragStart($event, 'Tileset', tileset)" :title="tileset.originalName">
         🌐 {{ tileset.name }}
       </div>
     </div>
@@ -106,9 +106,12 @@ const loadAssets = async () => {
     window.dispatchEvent(new CustomEvent('library-loaded'));
   }
 }
-const onDragStart = (event: DragEvent, type: string, model: AssetWithId) => {
+const onDragStart = (event: DragEvent, type: string, model?: AssetWithId) => {
   event.dataTransfer?.setData('type', type);
+  if(!model) return
   const url = getAssetUrl(model)
+    console.log("url--", url, model)
+
   if (url) {
     // 'url'是 DataTransfer API 中的保留格式名，它的格式需要为合法的绝对URI(以http:// 或 https:// 等开头)，否则浏览器会认为这不是合法的URI，会默认丢弃这个值
     // 如果不想被默认丢弃，可以使用其他的格式名，如 'modelUrl'

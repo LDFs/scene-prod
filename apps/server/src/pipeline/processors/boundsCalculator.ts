@@ -39,7 +39,7 @@ export async function calculateBounds(context: ProcessAssetType) {
         }
 
         // 计算边界
-        for (let i = 0; i < positions.length; i++) {
+        for (let i = 0; i < positions.length; i += 3) {
           const x = positions[i]
           const y = positions[i + 1]
           const z = positions[i + 2]

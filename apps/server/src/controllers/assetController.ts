@@ -4,6 +4,7 @@ import type { MultipartFile } from '@fastify/multipart'
 import path from 'path'
 import fs from 'fs'
 import { AssetType } from '@scene-prod/shared'
+import { assetQueue, processAsset } from '@/pipeline'
 
 const __dirname = path.resolve()   // 在哪个地方运行的这个服务
 
@@ -105,6 +106,12 @@ async function uploadAsset(req: FastifyRequest, res: FastifyReply) {
     // HDRI 和贴图文件上传到又拍云, 在数据库中存储对应的url
     if (assetType === 'hdri' || assetType === 'texture') {
 
+    }
+
+    // 如果是模型类型，加入处理队列
+    if (assetType === 'model') {
+      await assetQueue.add('process', { assetId: asset._id.toString() });
+      console.log(`[Upload] 资产已加入处理队列: ${asset._id}`);
     }
 
 
