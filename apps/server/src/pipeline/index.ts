@@ -6,6 +6,10 @@ import path from 'path'
 import { calculateBounds } from './processors/boundsCalculator'
 import { compressDraco } from './processors/dracoCompressor'
 import { formatConvert } from './processors/formatConverter'
+import { generateLODs } from './processors/lodGenerator'
+import { optimizeTextures } from './processors/textureOptimizer'
+import { extractZip } from './processors/zipExtractor'
+import { sanitize } from './processors/sanitizer'
 import { AssetWithId } from '@scene-prod/shared'
 import { ProcessAssetType } from './type'
 
@@ -21,16 +25,35 @@ async function processAsset(asset: AssetWithId) {
     lods: null,
     textures: {},
     tempDir: '',
+    originalFormat: ''
   }
   console.log(`[Pipeline] 开始处理资产: ${asset.name} (${asset._id})`)
+
+  // Step 0: ZIP 解压 (如果需要)
+  if (context.originalFormat === 'zip') {
+    console.log('[Pipeline] Step 0: ZIP 解压')
+    context.inputPath = await extractZip(context)
+  }
 
   // Step 1: 格式转换 (OBJ/FBX/STL → GLB)
   console.log('[Pipeline] Step 1: 格式转换')
   context.gltfPath = await formatConvert(context)
 
+  // Step 2: 清洗验证 (移除相机/灯光)
+  console.log('[Pipeline] Step 2: 清洗验证')
+  await sanitize(context)
+
   // Step 3: Draco 压缩
   console.log('[Pipeline] Step 3: Draco 压缩')
   context.compressedPath = await compressDraco(context)
+
+  // Step 4: 纹理优化 (KTX2 + 多分辨率)
+  console.log('[Pipeline] Step 4: 纹理优化')
+  context.textures = await optimizeTextures(context)
+
+  // Step 5: LOD 生成
+  console.log('[Pipeline] Step 5: LOD 生成')
+  context.lods = await generateLODs(context)
 
   // Step 6: 边界盒计算
   console.log('[Pipeline] Step 6: 边界盒计算')
@@ -76,7 +99,7 @@ assetQueue.process('process', async (job) => {
       bounds: context.bounds,
       stats: context.stats,
     })
-    console.log("[保存到服务器路径]：", context.compressedPath)
+    console.log('[保存到服务器路径]：', context.compressedPath)
     return { success: true, assetId }
   } catch (error: any) {
     console.error(`[Pipeline] 处理失败: ${assetId}`, error)

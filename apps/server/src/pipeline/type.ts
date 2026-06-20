@@ -33,6 +33,7 @@ export type ProcessAssetType = {
     textureCount: number,
   } | null,
   textures: {},
-  lods: null,
-  tempDir: ''
+  lods: Array<string> | null,
+  tempDir: string,
+  originalFormat: string
 }

@@ -308,6 +308,7 @@ export function fromAICommand(cmd: SceneCommand, sceneManager: SceneManager): Ac
       mesh.position.set(cmd.position?.x ?? 1, cmd.position?.y ?? 1, cmd.position?.z ?? 1)
       mesh.rotation.set(cmd.rotation?.x ?? 0, cmd.rotation?.y ?? 0, cmd.rotation?.z ?? 0)
       mesh.scale.set(cmd.scale.x ?? 1, cmd.scale.y ?? 1, cmd.scale.z ?? 1)
+      mesh.userData.isModelRoot = true  // 标记根节点
 
       return new AddObjectCommand(sceneManager, mesh, cmd.allowOverlap)
     }
@@ -347,7 +348,7 @@ export function fromAICommand(cmd: SceneCommand, sceneManager: SceneManager): Ac
       return new TransformObjectCommand(object, oldState, newState)
     }
     case 'modify_material': {
-      const object = sceneManager.getObjectByName(cmd.name)
+      const object = sceneManager.findObjectByName(cmd.name)
       if (!object || !(object instanceof THREE.Mesh) || !object.material) return null
       const oldMat = object.material as THREE.MeshStandardMaterial
       const oldState: MaterialState = {

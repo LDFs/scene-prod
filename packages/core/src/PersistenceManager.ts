@@ -243,7 +243,6 @@ export class PersistenceManager {
   extractModifications(object: THREE.Object3D): Record<string, any> {
     const modifications: Record<string, any> = {}
     object.traverse((child) => {
-      console.log('child--', child)
       if (child instanceof THREE.Mesh && child !== object) {
         const hasModifications =
           child.userData.positionModified ||

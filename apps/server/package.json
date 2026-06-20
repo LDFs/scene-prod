@@ -20,6 +20,7 @@
     "@scene-prod/ai": "workspace:*",
     "@scene-prod/core": "workspace:*",
     "@scene-prod/shared": "workspace:*",
+    "adm-zip": "^0.5.17",
     "bull": "^4.16.5",
     "draco3dgltf": "^1.5.7",
     "fastify": "^4.28.0",
@@ -31,12 +32,10 @@
     "zod": "^3.23.8"
   },
   "devDependencies": {
+    "@types/adm-zip": "^0.5.8",
     "@types/draco3dgltf": "^1.4.3",
     "@types/node": "^20.12.0",
     "tsx": "^4.19.0",
     "typescript": "^5.5.4"
-  },
-  "overrides": {
-    "sharp": "^0.35.1"
   }
 }
