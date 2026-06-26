@@ -2,6 +2,7 @@ import { AssetModel } from '../models/assetModel'
 import { assetQueue } from './queue'
 import fs from 'fs'
 import path from 'path'
+import { uploadFile } from '@/services/upFile'
 
 import { calculateBounds } from './processors/boundsCalculator'
 import { compressDraco } from './processors/dracoCompressor'
@@ -12,6 +13,8 @@ import { extractZip } from './processors/zipExtractor'
 import { sanitize } from './processors/sanitizer'
 import { AssetWithId } from '@scene-prod/shared'
 import { ProcessAssetType } from './type'
+
+const __dirname = path.resolve() 
 
 async function processAsset(asset: AssetWithId) {
   const context: ProcessAssetType = {
@@ -25,7 +28,7 @@ async function processAsset(asset: AssetWithId) {
     lods: null,
     textures: {},
     tempDir: '',
-    originalFormat: ''
+    originalFormat: '',
   }
   console.log(`[Pipeline] 开始处理资产: ${asset.name} (${asset._id})`)
 
@@ -86,6 +89,18 @@ assetQueue.process('process', async (job) => {
     // 执行流水线
     context = await processAsset(asset)
 
+    // 上传 compressed 到云存储
+    let compressedCloudUrl = null
+    if (context.compressedPath) {
+      // 将相对路径转为绝对路径
+      const localPath = path.join(__dirname, context.compressedPath)
+      const remotePath = `/assets/compressed/${assetId}.glb`
+      try {
+        const res = await uploadFile(localPath, remotePath)
+        compressedCloudUrl = res.Location
+      }catch(err){}
+    }
+
     // 更新资产记录
     await AssetModel.findByIdAndUpdate(assetId, {
       processingStatus: 'ready',
@@ -98,6 +113,7 @@ assetQueue.process('process', async (job) => {
       },
       bounds: context.bounds,
       stats: context.stats,
+      'cloudUrls.compressed': compressedCloudUrl,
     })
     console.log('[保存到服务器路径]：', context.compressedPath)
     return { success: true, assetId }

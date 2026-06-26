@@ -140,7 +140,7 @@ export function getAssetUrl(asset: AssetWithId): string {
 
 export function getModelUrl(asset: AssetWithId): string {
   if(asset.cloudUrls?.compressed) {
-    return asset.cloudUrls.compressed
+    return 'https://' + asset.cloudUrls.compressed
   }
   if(asset.processingStatus === 'ready' && asset.processedFiles?.compressed) {
     return `${BASE_URL}${asset.processedFiles.compressed}`

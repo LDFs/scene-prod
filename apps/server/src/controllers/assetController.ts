@@ -120,6 +120,19 @@ async function uploadAsset(req: FastifyRequest, res: FastifyReply) {
     }
     // HDRI 和贴图文件上传到云存储, 在数据库中存储对应的url
     if (assetType === 'hdri' || assetType === 'texture') {
+      const localPath = savePath
+      const remotePath = `/assets/${assetType}/${asset._id.toString()}${ext}`
+      try {
+        const res = await uploadFile(localPath, remotePath)
+        if (res) {
+          await AssetModel.findByIdAndUpdate(asset._id, {
+            'cloudUrls.file': res.Location,
+          })
+          if (!asset.cloudUrls) asset.cloudUrls = {}
+          asset.cloudUrls.file = res.Location
+          console.log(`[Upload] ${assetType} 已上传到云端: ${res.Location}`)
+        }
+      } catch (err) {}
     }
 
     // 如果是模型类型，加入处理队列

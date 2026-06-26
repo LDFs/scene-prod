@@ -17,6 +17,7 @@ async function uploadFile(filePath: string, filename: string): Promise<COS.Uploa
         Region: 'ap-guangzhou', // 存储桶所在地域，例如 ap-beijing，必须字段
         Key: filename, // 存储在桶里的对象键（例如1.jpg，a/b/test.txt），必须字段
         FilePath: filePath, // 必须
+        ACL: 'public-read',   // 👈 对象设为公有读
         SliceSize: 1024 * 1024 * 5, // 触发分块上传的阈值，超过5MB使用分块上传，非必须
         onTaskReady: function (taskId) {
           // 非必须
