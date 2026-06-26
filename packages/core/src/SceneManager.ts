@@ -12,6 +12,8 @@ import { StatsManager } from './StatsManager'
 import { TriangleStatsManager } from './TriangleStatsManager'
 import { ViewManager, type ViewPreset } from './ViewManager'
 import { Easing, Group, Tween } from '@tweenjs/tween.js'
+import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js'
+
 
 export class SceneManager {
   canvas: HTMLCanvasElement
@@ -70,6 +72,10 @@ export class SceneManager {
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping // 色调映射
     this.renderer.toneMappingExposure = 1.0 // 曝光补偿
     this.renderer.outputColorSpace = THREE.SRGBColorSpace // 输出颜色空间
+
+    const pmrem = new THREE.PMREMGenerator(this.renderer)
+    this.scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture
+
 
     this.controlManager = new CameraControlManager(this.camera, this.renderer.domElement)
 
