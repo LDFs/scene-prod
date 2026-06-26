@@ -11,10 +11,11 @@ import { generateLODs } from './processors/lodGenerator'
 import { optimizeTextures } from './processors/textureOptimizer'
 import { extractZip } from './processors/zipExtractor'
 import { sanitize } from './processors/sanitizer'
+import { optimizeSceneGraph } from './processors/optimizeSceneGraph'
 import { AssetWithId } from '@scene-prod/shared'
 import { ProcessAssetType } from './type'
 
-const __dirname = path.resolve() 
+const __dirname = path.resolve()
 
 async function processAsset(asset: AssetWithId) {
   const context: ProcessAssetType = {
@@ -45,6 +46,10 @@ async function processAsset(asset: AssetWithId) {
   // Step 2: 清洗验证 (移除相机/灯光)
   console.log('[Pipeline] Step 2: 清洗验证')
   await sanitize(context)
+
+  // Step 2.5: 场景图优化（压平层级 + 去重）
+  console.log('[Pipeline] Step 2.5: 场景图优化')
+  await optimizeSceneGraph(context)
 
   // Step 3: Draco 压缩
   console.log('[Pipeline] Step 3: Draco 压缩')
@@ -98,7 +103,7 @@ assetQueue.process('process', async (job) => {
       try {
         const res = await uploadFile(localPath, remotePath)
         compressedCloudUrl = res.Location
-      }catch(err){}
+      } catch (err) {}
     }
 
     // 更新资产记录
