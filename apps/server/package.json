@@ -22,6 +22,7 @@
     "@scene-prod/shared": "workspace:*",
     "adm-zip": "^0.5.17",
     "bull": "^4.16.5",
+    "cos-nodejs-sdk-v5": "^2.15.4",
     "draco3dgltf": "^1.5.7",
     "fastify": "^4.28.0",
     "lowdb": "^7.0.1",
