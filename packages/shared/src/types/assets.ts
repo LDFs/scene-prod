@@ -49,6 +49,17 @@ export type Asset = {
       center: { x: number; y: number; z: number }
       radius: number
     }
+    // 各轴尺寸 (max - min)，文件原始单位
+    dimensions?: { x: number; y: number; z: number }
+    // 最长边，用于尺寸归一化的参考量
+    longestEdge?: number
+  }
+
+  // 尺寸归一化：把模型换算到米的缩放因子及其来源
+  sizing?: {
+    normalizeScale: number // 实例化进场景时乘到模型根 scale 上，使其落在米制
+    unitGuess: string // 猜测的原始单位：'m' | 'cm' | 'mm' | 'unknown'
+    source: 'heuristic' | 'manual' | 'category' // 来源；manual/category 可覆盖 heuristic
   }
 
   // 模型统计信息

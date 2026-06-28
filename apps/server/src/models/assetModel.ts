@@ -92,7 +92,16 @@ const AssetSchema = new mongoose.Schema<Asset>({
     sphere: {
       center: { x: Number, y: Number, z: Number },
       radius: Number
-    }
+    },
+    dimensions: { x: Number, y: Number, z: Number }, // 各轴尺寸 (max - min)
+    longestEdge: Number                              // 最长边，尺寸归一化参考
+  },
+
+  // 尺寸归一化
+  sizing: {
+    normalizeScale: Number,
+    unitGuess: String,
+    source: { type: String, enum: ['heuristic', 'manual', 'category'] }
   },
 
   // 模型统计信息

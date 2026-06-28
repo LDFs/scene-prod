@@ -6,7 +6,7 @@
       <button class="upload-btn" @click="triggerFileInput">
         <span>📤</span> 上传资产
       </button>
-      <input ref="fileInput" type="file" multiple accept=".gltf,.glb,.jpg,.jpeg,.png,.hdr,.exr, .obj, .mtl, .zip" @change="handleFileSelect"
+      <input ref="fileInput" type="file" multiple accept=".gltf,.glb,.jpg,.jpeg,.png,.hdr,.exr, .obj, .mtl, .zip, .fbx" @change="handleFileSelect"
         style="display: none" />
     </div>
 

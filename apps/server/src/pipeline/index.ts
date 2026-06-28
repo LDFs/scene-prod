@@ -12,6 +12,7 @@ import { optimizeTextures } from './processors/textureOptimizer'
 import { extractZip } from './processors/zipExtractor'
 import { sanitize } from './processors/sanitizer'
 import { optimizeSceneGraph } from './processors/optimizeSceneGraph'
+import { computeSizing } from './utils/sizing'
 import { AssetWithId } from '@scene-prod/shared'
 import { ProcessAssetType } from './type'
 
@@ -106,6 +107,12 @@ assetQueue.process('process', async (job) => {
       } catch (err) {}
     }
 
+    // 尺寸归一化:根据最长边启发式推断换算到米的缩放因子
+    const sizing = context.bounds ? computeSizing(context.bounds.longestEdge) : null
+    if (sizing) {
+      console.log(`[Pipeline] 尺寸归一化: ×${sizing.normalizeScale} (猜测单位 ${sizing.unitGuess})`)
+    }
+
     // 更新资产记录
     await AssetModel.findByIdAndUpdate(assetId, {
       processingStatus: 'ready',
@@ -118,6 +125,7 @@ assetQueue.process('process', async (job) => {
       },
       bounds: context.bounds,
       stats: context.stats,
+      ...(sizing ? { sizing } : {}),
       'cloudUrls.compressed': compressedCloudUrl,
     })
     console.log('[保存到服务器路径]：', context.compressedPath)

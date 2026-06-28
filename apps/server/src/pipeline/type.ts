@@ -25,6 +25,12 @@ export type ProcessAssetType = {
       }
       radius: number
     }
+    dimensions: {
+      x: number
+      y: number
+      z: number
+    }
+    longestEdge: number
   } | null
   stats:  {
     triangleCount: number,

@@ -67,15 +67,26 @@ export async function calculateBounds(context: ProcessAssetType) {
       z: (minZ + maxZ) / 2,
     }
     const radius = Math.sqrt(Math.pow(maxX - center.x, 2) + Math.pow(maxY - center.y, 2) + Math.pow(maxZ - center.z, 2))
+
+    // 各轴尺寸与最长边（文件原始单位，供后续尺寸归一化使用）
+    const dimensions = {
+      x: maxX - minX,
+      y: maxY - minY,
+      z: maxZ - minZ,
+    }
+    const longestEdge = Math.max(dimensions.x, dimensions.y, dimensions.z)
+
     const bounds = {
       box: {
         min: { x: minX, y: minY, z: minZ },
-        max: { x: minX, y: minY, z: minZ },
+        max: { x: maxX, y: maxY, z: maxZ },
       },
       sphere: {
         center,
         radius,
       },
+      dimensions,
+      longestEdge,
     }
 
     const stats = {
@@ -92,6 +103,11 @@ export async function calculateBounds(context: ProcessAssetType) {
     )
     console.log(
       `[BoundsCalculator] 统计: ${stats.triangleCount} 三角面, ${stats.vertexCount} 顶点, ${stats.materialCount} 材质, ${stats.textureCount} 纹理`,
+    )
+    console.log(
+      `[BoundsCalculator] 尺寸: ${dimensions.x.toFixed(3)} × ${dimensions.y.toFixed(3)} × ${dimensions.z.toFixed(
+        3,
+      )}, 最长边 ${longestEdge.toFixed(3)}`,
     )
 
     return { bounds, stats }

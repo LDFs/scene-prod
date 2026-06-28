@@ -53,6 +53,9 @@ const onDrop = async (event: DragEvent) => {
 > 'url'是 DataTransfer API 中的保留格式名，它的格式需要为合法的绝对URI(以http:// 或 https:// 等开头)，否则浏览器会认为这不是合法的URI，会默认丢弃这个值
 > 如果不想被默认丢弃，可以使用其他的格式名，如 'modelUrl'
 
+- 还使用 DataTransfer API 来传递模型的其他一些属性，比如 sizing，在读取时，需要注意，要在 await 前同步读取内容
+否则根据 HTML 拖放规则，dataTransfer 里的数据只有在 drop 事件同步派发期间才能读取，在 await 之后 getData() 返回空字符串
+
 ### 请求静态资源
 使用的是 fastify 框架
 在 server 中注册

@@ -110,13 +110,15 @@ const onDragStart = (event: DragEvent, type: string, model?: AssetWithId) => {
   event.dataTransfer?.setData('type', type);
   if(!model) return
   const url = getAssetUrl(model)
-    console.log("url--", url, model)
+    console.log("url--", url, model, model.sizing?.normalizeScale)
 
   if (url) {
     // 'url'是 DataTransfer API 中的保留格式名，它的格式需要为合法的绝对URI(以http:// 或 https:// 等开头)，否则浏览器会认为这不是合法的URI，会默认丢弃这个值
     // 如果不想被默认丢弃，可以使用其他的格式名，如 'modelUrl'
     event.dataTransfer?.setData('url', url);
     event.dataTransfer?.setData('name', model.name);
+    // 尺寸归一化因子，实例化时乘到模型根 scale 上
+    event.dataTransfer?.setData('normalizeScale', String(model.sizing?.normalizeScale ?? 1));
   }
 }
 const getAssetUrl = (asset: AssetWithId) => {
