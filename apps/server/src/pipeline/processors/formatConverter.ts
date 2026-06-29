@@ -5,6 +5,7 @@ import fs from 'fs'
 import { ProcessAssetType } from '../type'
 
 const execAsync = promisify(exec)
+const __dirname = path.resolve()
 
 /**
  * 格式转换处理器
@@ -26,7 +27,7 @@ export async function formatConvert(context: ProcessAssetType) {
 
   // 绝对路径用于命令执行
   const absoluteInputPath = path.resolve(context.inputPath)
-  const absoluteOutputPath = path.resolve(relativeOutputPath)
+  const absoluteOutputPath = path.join(__dirname, relativeOutputPath)
   const absoluteOutputDir = path.dirname(absoluteOutputPath)
 
   // 确保输出目录存在
@@ -36,13 +37,20 @@ export async function formatConvert(context: ProcessAssetType) {
 
   try {
     if (ext === '.fbx') {
+      // 检查本地 bin 目录是否有 FBX2glTF
+      const localBin = path.join(process.cwd(), 'bin', 'FBX2glTF.exe');
+      const fbxCommand = fs.existsSync(localBin) ? `"${localBin}"` : 'FBX2glTF';
+
       // FBX2glTF 会自动添加 .glb 后缀，所以 -o 参数不应包含 .glb
       const outputPath = absoluteOutputPath.replace('.glb', '')
       console.log(`[FormatConverter] 使用 FBX2glTF 转换 FBX`)
 
       // fbx2gltf 使用 Autodesk 官方 FBX SDK，精度最高
       // --binary 输出 .glb 单文件，--khr-materials-unlit 可选
-      await execAsync(`npx fbx2gltf --binary --input "${absoluteInputPath}" --output "${outputPath}"`)
+      const { stdout, stderr } = await execAsync(`${fbxCommand} --binary --input "${absoluteInputPath}" --output "${outputPath}"`)
+
+      if (stdout) console.log('[FormatConverter] stdout:', stdout);
+      if (stderr) console.log('[FormatConverter] stderr:', stderr);
     } else if (ext === '.obj') {
       // OBJ 转换 - 需要 obj2gltf
       console.log('[FormatConverter] 使用 obj2gltf 转换 OBJ')
@@ -59,8 +67,8 @@ export async function formatConvert(context: ProcessAssetType) {
       throw new Error(`[FormatConverter] 转换后文件不存在: ${absoluteOutputPath}`)
     }
 
-    console.log(`[FormatConverter] 转换完成: ${relativeOutputPath}`)
-    return relativeOutputPath
+    console.log(`[FormatConverter] 转换完成: ${absoluteOutputPath}`)
+    return absoluteOutputPath
   } catch (error: any) {
     console.error(`[FormatConverter] 转换失败 (${ext}):`, error.message)
     if (error.stdout) console.log('stdout:', error.stdout)
