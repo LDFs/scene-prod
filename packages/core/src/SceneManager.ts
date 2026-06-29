@@ -22,6 +22,7 @@ export class SceneManager {
   camera: THREE.PerspectiveCamera
   private controlManager: CameraControlManager
   controls: OrbitControls
+  orbitControl!: OrbitCameraControl
   private raycaster: THREE.Raycaster
   private mouse: THREE.Vector2
   /**
@@ -80,6 +81,7 @@ export class SceneManager {
     this.controlManager = new CameraControlManager(this.camera, this.renderer.domElement)
 
     const orbitControl = new OrbitCameraControl(this.camera, this.renderer.domElement)
+    this.orbitControl = orbitControl
     this.controlManager.register('orbit', orbitControl)
 
     const ghostControl = new GhostCameraControl(this.camera, this.renderer.domElement)
