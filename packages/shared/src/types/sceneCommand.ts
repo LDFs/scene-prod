@@ -6,4 +6,5 @@ export type {
   TransformObjectCommand,
   ModifyMaterialCommand,
   ModifyPropertyCommand,
+  AddModelCommand,
 } from '../schema.ts'

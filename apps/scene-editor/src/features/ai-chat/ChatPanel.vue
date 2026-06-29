@@ -39,21 +39,74 @@
 </template>
 
 <script setup lang="ts">
-import { ref, nextTick } from 'vue'
+import { ref, nextTick, onMounted } from 'vue'
+import * as THREE from 'three'
 import { chatWithAI, chatWithAIStream, type ChatMessage } from '@/services/ai'
 import { useManagerStore } from '@/stores/manager'
 import { buildSceneSystemPrompt } from './scenePrompt'
 import { AISceneResponseSchema } from '@scene-prod/shared/schema'
-import { SceneCommand } from '@scene-prod/shared'
-import { fromAICommand, ActualCommand, BatchCommand } from '@scene-prod/core'
+import { SceneCommand, AssetWithId } from '@scene-prod/shared'
+import { fromAICommand, ActualCommand, BatchCommand, AddObjectCommand } from '@scene-prod/core'
 import { useHistoryStore } from '@/stores/history'
+import { getAssets, getModelUrl } from '@/services/asset'
 
 const managerStore = useManagerStore()
 const historyStore = useHistoryStore()
 
+// 模型库清单：用于告知 AI 有哪些可用模型，并在 add_model 时解析为具体资源
+const libraryModels = ref<AssetWithId[]>([])
+
+async function loadLibraryModels() {
+  try {
+    const { assets } = await getAssets('model')
+    libraryModels.value = assets
+  } catch (error) {
+    console.error('加载模型库失败:', error)
+  }
+}
+
+onMounted(loadLibraryModels)
+
 function getSystemMessages(): ChatMessage[] {
   const objects = managerStore.sceneManager ? [...managerStore.sceneManager.objects] : []
-  return [{ role: 'system', content: buildSceneSystemPrompt(objects) }]
+  return [{ role: 'system', content: buildSceneSystemPrompt(objects, libraryModels.value) }]
+}
+
+/**
+ * 把单条 AI 命令转成可执行命令。add_model 需异步加载 GLTF，故单独处理；
+ * 其余命令复用同步的 fromAICommand。无法执行时返回 null。
+ */
+async function resolveCommand(cmd: SceneCommand): Promise<ActualCommand | null> {
+  if (cmd.commandType !== 'add_model') {
+    return fromAICommand(cmd, managerStore.sceneManager!)
+  }
+
+  const persistenceManager = managerStore.persistenceManager
+  if (!persistenceManager) return null
+
+  const asset = libraryModels.value.find((m) => m.name === cmd.modelName)
+  if (!asset) return null
+
+  const url = getModelUrl(asset)
+  if (!url) return null
+
+  const object = await persistenceManager.loadGLTFModel(url, cmd.name ?? cmd.modelName)
+
+  // 尺寸归一化（与拖拽落地一致），再叠加 AI 指定的相对缩放
+  const normalizeScale = asset.sizing?.normalizeScale ?? 1
+  if (normalizeScale !== 1) object.scale.multiplyScalar(normalizeScale)
+  if (cmd.scale) {
+    object.scale.multiply(new THREE.Vector3(cmd.scale.x ?? 1, cmd.scale.y ?? 1, cmd.scale.z ?? 1))
+  }
+
+  if (cmd.position) {
+    object.position.set(cmd.position.x ?? 0, cmd.position.y ?? 0, cmd.position.z ?? 0)
+  }
+  if (cmd.rotation) {
+    object.rotation.set(cmd.rotation.x ?? 0, cmd.rotation.y ?? 0, cmd.rotation.z ?? 0)
+  }
+
+  return new AddObjectCommand(managerStore.sceneManager!, object, cmd.allowOverlap)
 }
 
 const messages = ref<ChatMessage[]>([])
@@ -77,6 +130,9 @@ async function send() {
   loading.value = true
   await scrollToBottom()
 
+  // 模型库为空时兜底加载一次，确保 AI 拿到最新清单
+  if (libraryModels.value.length === 0) await loadLibraryModels()
+
   const result = await chatWithAI([...getSystemMessages(), ...messages.value.filter((m) => !m.skipContext)])
   loading.value = false
 
@@ -86,16 +142,25 @@ async function send() {
       console.log('[AI 指令]', parsed.commands)
       const failed: string[] = []
 
-      const cmds = parsed.commands
-        .map((cmd) => {
-          const c = fromAICommand(cmd, managerStore.sceneManager!)
-          if (!c) {
-            failed.push(cmd.commandType + cmd.name)
+      const resolved = await Promise.all(
+        parsed.commands.map(async (cmd) => {
+          try {
+            const c = await resolveCommand(cmd)
+            if (!c) {
+              const label = cmd.commandType === 'add_model' ? cmd.modelName : cmd.name
+              failed.push(cmd.commandType + label)
+            }
+            return c
+          } catch (error) {
+            console.error('解析指令失败:', cmd, error)
+            const label = cmd.commandType === 'add_model' ? cmd.modelName : cmd.name
+            failed.push(cmd.commandType + label)
+            return null
           }
-          return c
-        })
-        .filter(Boolean) as ActualCommand[]
-      // .filter(Boolean) 过滤掉假植
+        }),
+      )
+      const cmds = resolved.filter(Boolean) as ActualCommand[]
+      // .filter(Boolean) 过滤掉无法执行的指令
 
       if (cmds.length > 0) {
         const batch = new BatchCommand(cmds, parsed.explanation)

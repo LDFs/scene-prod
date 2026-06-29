@@ -127,12 +127,25 @@ const ModifyPropertyCommandSchema = z.object({
   visible: z.boolean().optional(),
 })
 
+const AddModelCommandSchema = z.object({
+  commandType: z.literal('add_model'),
+  // 从模型库中取出已有模型加入场景（前端异步加载 GLTF 后构造 AddObjectCommand）
+  modelName: z.string(),          // 库中模型的名称，必须取自系统提供的模型库清单
+  name: z.string().optional(),    // 加入场景后实例的名称，缺省使用 modelName
+  position: Vec3Schema.optional(),
+  rotation: Vec3Schema.optional(), // 单位：弧度
+  scale: Vec3Schema.optional(),    // 相对倍数，作用在尺寸归一化之后；缺省为 1
+  // 允许与现有物体重叠（跳过自动位置修正）
+  allowOverlap: z.boolean().default(false),
+})
+
 export const SceneCommandSchema = z.discriminatedUnion('commandType', [
   CreateObjectCommandSchema,
   DeleteObjectCommandSchema,
   TransformObjectCommandSchema,
   ModifyMaterialCommandSchema,
   ModifyPropertyCommandSchema,
+  AddModelCommandSchema,
 ])
 
 /** AI 返回的完整结构：自然语言说明 + 命令列表 */
@@ -149,4 +162,5 @@ export type DeleteObjectCommand = z.infer<typeof DeleteObjectCommandSchema>
 export type TransformObjectCommand = z.infer<typeof TransformObjectCommandSchema>
 export type ModifyMaterialCommand = z.infer<typeof ModifyMaterialCommandSchema>
 export type ModifyPropertyCommand = z.infer<typeof ModifyPropertyCommandSchema>
+export type AddModelCommand = z.infer<typeof AddModelCommandSchema>
 export type vec3Type = z.infer<typeof Vec3Schema>
