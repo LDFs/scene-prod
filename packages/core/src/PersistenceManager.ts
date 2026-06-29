@@ -162,7 +162,7 @@ export class PersistenceManager {
     }
   }
 
-  async loadGLTFModel(url: string): Promise<THREE.Group> {
+  async loadGLTFModel(url: string, name?: string): Promise<THREE.Group> {
     if (this.modelCache.has(url)) {
       const model = this.modelCache.get(url)!
       if (model instanceof THREE.Group) {
@@ -183,6 +183,7 @@ export class PersistenceManager {
           model.userData.modelType = 'GLTF'
           model.userData.modelUrl = url
           model.userData.isModelRoot = true  // 标记根节点
+          name && (model.name = name)
           this.modelCache.set(url, model)
           const cloned = SkeletonUtils.clone(model)
           if (cloned instanceof THREE.Group) {

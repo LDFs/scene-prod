@@ -72,7 +72,7 @@ const onDrop = async (event: DragEvent) => {
     // 否则 drop 事件结束后 dataTransfer 进入 protected mode，getData 返回 ""
     const normalizeScale = Number(event.dataTransfer?.getData('normalizeScale')) || 1
     try {
-      object = await persistenceManager?.loadGLTFModel(url as string)
+      object = await persistenceManager?.loadGLTFModel(url as string, event.dataTransfer?.getData('name'))
       // 首次实例化时把模型换算到米制（之后会随 scale 一并保存，重载场景不再重复应用）
       if (object && normalizeScale !== 1) {
         object.scale.multiplyScalar(normalizeScale)
