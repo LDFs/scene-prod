@@ -5,7 +5,7 @@ import path from 'path'
 import fs from 'fs'
 import { AssetType } from '@scene-prod/shared'
 import { assetQueue, processAsset } from '@/pipeline'
-import { uploadFile } from '@/services/upFile'
+import { uploadFile, deleteObject } from '@/services/upFile'
 
 const __dirname = path.resolve() // 在哪个地方运行的这个服务
 
@@ -272,6 +272,9 @@ async function deleteAsset(req: FastifyRequest, res: FastifyReply) {
 
     // 删除云端文件
     if (asset.cloudUrls) {
+      console.log('[删除云端文件]:', asset.cloudUrls);
+      asset.cloudUrls.compressed && deleteObject(asset.cloudUrls.compressed)
+      asset.cloudUrls.thumbnail && deleteObject(asset.cloudUrls.thumbnail)
     }
 
     // 删除数据库记录
