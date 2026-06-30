@@ -58,6 +58,7 @@
     <div class="group">
       <button @click="showImportDialog = true" title="批量导入">📥 批量导入</button>
       <button @click="save" class="save-btn">💾 保存</button>
+      <button @click="share" class="save-btn">🔗 分享</button>
     </div>
 
     <ImportDialog v-model:visible="showImportDialog" />
@@ -66,8 +67,10 @@
 
 <script setup lang="ts">
 import { ref, computed } from 'vue';
+import { useRoute } from 'vue-router';
 
 import ImportDialog from '@/features/toolbar/ImportDialog.vue';
+import { publishScene } from '@/services/api';
 import { useEditorCoreStore } from '@/stores/editorCore';
 import { useManagerStore } from '@/stores/manager';
 import { TransformControlsMode } from 'three/examples/jsm/controls/TransformControls.js';
@@ -77,6 +80,7 @@ import 'element-plus/es/components/message/style/css'
 // ViewPreset 本地类型，与 @scene-prod/core ViewManager 保持一致
 type ViewPreset = 'perspective' | 'top' | 'bottom' | 'front' | 'back' | 'right' | 'left'
 
+const route = useRoute();
 const showImportDialog = ref(false);
 const editorCoreStore = useEditorCoreStore();
 const managerStore = useManagerStore();
@@ -150,6 +154,39 @@ const save = async () => {
       })
     },
   });
+}
+
+// 发布并复制分享链接：发布前先保存，保证只读链接反映当前场景
+const share = async () => {
+  const sceneId = route.params.sceneId as string
+  if (!sceneId) {
+    ElMessage({ message: '无法获取场景ID', type: 'error' })
+    return
+  }
+
+  // 1. 先保存当前场景
+  const saved = await managerStore.persistenceManager?.saveScene(editorCoreStore.sceneMetadata)
+  if (!saved) {
+    ElMessage({ message: '保存失败，无法分享', type: 'error' })
+    return
+  }
+
+  // 2. 发布
+  const ok = await publishScene(sceneId)
+  if (!ok) {
+    ElMessage({ message: '发布失败', type: 'error' })
+    return
+  }
+
+  // 3. 复制只读链接到剪贴板
+  const shareUrl = `${window.location.origin}/view/${sceneId}`
+  try {
+    await navigator.clipboard.writeText(shareUrl)
+    ElMessage({ message: `分享链接已复制：${shareUrl}`, type: 'success' })
+  } catch {
+    // 剪贴板不可用（如非 HTTPS 环境）时，至少把链接展示出来
+    ElMessage({ message: `分享链接：${shareUrl}`, type: 'success' })
+  }
 }
 
 

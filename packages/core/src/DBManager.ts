@@ -80,6 +80,30 @@ export class DBManager {
     }
   }
 
+  /**
+   * 公开（只读）加载已发布场景
+   * 走 /share/public 接口，未发布的场景返回 null
+   * @param sceneId 场景ID
+   */
+  async getPublicSceneData(sceneId = 'default'): Promise<SceneResponse | null> {
+    try {
+      const response = await fetch(`${this.apiBaseURL}/share/public?sceneId=${sceneId}`)
+      const data = await response.json()
+      if(data.success) {
+        return {
+          objects: data.objects || [],
+          metadata: data.metadata || {}
+        }
+      } else {
+        console.error('公开场景加载失败:', data.message)
+        return null
+      }
+    } catch (error) {
+      console.error('公开场景加载失败:', error)
+      return null
+    }
+  }
+
   async clearAllObjects(sceneId = 'default'): Promise<boolean> {
     try {
       const response = await fetch(`${this.apiBaseURL}/scene/clear?sceneId=${sceneId}`,  {

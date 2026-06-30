@@ -79,6 +79,50 @@ export async function deleteScene(sceneId: string) {
   }
 }
 
+/**
+ * 发布场景，使其可通过分享链接公开访问
+ * @returns 是否发布成功
+ */
+export async function publishScene(sceneId: string): Promise<boolean> {
+  try {
+    const response = await fetch(`${API_BASE_URL}/share/publish?sceneId=${sceneId}`, {
+      method: 'POST',
+    })
+    const data = await response.json()
+    if (data.success) {
+      return true
+    } else {
+      console.error('发布场景失败:', data.message)
+      return false
+    }
+  } catch (error) {
+    console.error('发布场景失败:', error)
+    return false
+  }
+}
+
+/**
+ * 取消发布场景，分享链接随即失效
+ * @returns 是否取消成功
+ */
+export async function unpublishScene(sceneId: string): Promise<boolean> {
+  try {
+    const response = await fetch(`${API_BASE_URL}/share/unpublish?sceneId=${sceneId}`, {
+      method: 'POST',
+    })
+    const data = await response.json()
+    if (data.success) {
+      return true
+    } else {
+      console.error('取消发布失败:', data.message)
+      return false
+    }
+  } catch (error) {
+    console.error('取消发布失败:', error)
+    return false
+  }
+}
+
 export async function getSceneData(sceneId: string) {
   try {
     const response = await fetch(`${API_BASE_URL}/scene/load?sceneId=${sceneId}`)

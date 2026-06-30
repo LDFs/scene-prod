@@ -59,6 +59,8 @@ export const SceneDataSchema = z.object({
   backgroundColor: z.string(),
   ambientIntensity: z.number(),
   cameraPosition: Vec3Schema.optional(),
+  // 改场景是否发布，是的话才可以预览查看
+  isPublished: z.boolean().default(false)
 })
 
 // ── Scene Command Schemas ──────────────────────────────────────────────────────

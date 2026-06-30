@@ -18,7 +18,7 @@ import { getXYZValueWithDefault } from './utils/sceneTools'
  * 加载模型
  */
 export class PersistenceManager {
-  static dracoPath: string = 'https://www.gstatic.com/draco/v1/decoders/'
+  static dracoPath: string = '/draco/'
 
   static setDracoPath(path: string) {
     PersistenceManager.dracoPath = path.endsWith('/') ? path : path + '/'
@@ -54,6 +54,19 @@ export class PersistenceManager {
     this.currentSceneId = sceneId
     await this.dbManager?.init()
     await this.loadScene(sceneId)
+  }
+
+  /**
+   * 公开（只读）初始化：用于分享链接的 viewer
+   * 只加载已发布场景，不涉及编辑相关的写入
+   * @param sceneId 场景ID
+   */
+  async initPublic(sceneId: string): Promise<boolean> {
+    this.currentSceneId = sceneId
+    await this.dbManager?.init()
+    const sceneData = await this.loadScene(sceneId, true)
+    // null 表示场景不存在或未发布，viewer 据此展示错误态
+    return !!sceneData
   }
 
   /**
@@ -194,7 +207,7 @@ export class PersistenceManager {
         },
         undefined,
         (error) => {
-          const errorMsg = `模型文件不存在或已被删除: ${url}`
+          const errorMsg = `模型加载失败: ${url}`
           console.error('❌', errorMsg, error)
           reject(new Error(errorMsg))
         },
@@ -390,10 +403,18 @@ export class PersistenceManager {
     return current
   }
 
-  async loadScene(sceneId: string) {
+  /**
+   * 加载场景
+   * @param sceneId 场景ID
+   * @param isPublic 是否加载已发布的场景
+   * @returns sceneData | null
+   */
+  async loadScene(sceneId: string, isPublic = false) {
     this.currentSceneId = sceneId || this.currentSceneId
 
-    const sceneData = await this.dbManager?.getSceneData(this.currentSceneId)
+    const sceneData = isPublic
+      ? await this.dbManager?.getPublicSceneData(this.currentSceneId)
+      : await this.dbManager?.getSceneData(this.currentSceneId)
 
     this.sceneManager?.clearScene()
     // this.editorAdapter?.resetObjects()
@@ -440,6 +461,8 @@ export class PersistenceManager {
     }
 
     console.log(`场景加载完成：成功 ${successCount}/${objects.length}`)
+
+    return sceneData ?? null
   }
 
   async saveScene(
@@ -473,6 +496,7 @@ export class PersistenceManager {
       backgroundColor: storeData.backgroundColor || '#ffffff',
       ambientIntensity: storeData.ambientIntensity || 1.0,
       cameraPosition: this.sceneManager?.getCameraPosition() || { x: 5, y: 5, z: 5 },
+      isPublished: storeData.isPublished
     })
     if (!result) {
       callBacks?.onError?.('保存场景失败')

@@ -9,6 +9,7 @@ import connectDB from './plugins/db'
 import projectRoutes from './routes/project'
 import assetRoutes from './routes/asset'
 import aiRoutes from './routes/ai'
+import shareRoutes from './routes/share'
 
 const app = Fastify({ logger: true })
 const __dirname = dirname(fileURLToPath(import.meta.url))
@@ -37,6 +38,7 @@ await app.register(staticFiles, {
 await projectRoutes(app)
 await assetRoutes(app)
 await aiRoutes(app)
+await shareRoutes(app)
 app.get('/health', async () => ({ ok: true }))
 
 const port = Number(process.env.PORT ?? 3100)
