@@ -4,6 +4,7 @@ import { DRACOLoader } from 'three/examples/jsm/loaders/DRACOLoader.js';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 import { OBJLoader } from 'three/examples/jsm/loaders/OBJLoader.js';
 import { MTLLoader } from 'three/examples/jsm/loaders/MTLLoader.js';
+import { FBXLoader } from 'three/examples/jsm/loaders/FBXLoader.js';
 
 
 export class ThumbnailGenerator {
@@ -63,22 +64,25 @@ export class ThumbnailGenerator {
     });
   }
 
-  async generate(file: File): Promise<Blob | null> {
-    const url = URL.createObjectURL(file)
+  /**
+   * 加载完成后的公共渲染逻辑：入场景 → 相机自适应 → 渲染 → 导出 PNG。
+   * 无论成功与否，finally 都会移除模型、释放显存并回收所有 objectURL。
+   * @param loadModel 各格式各自的加载逻辑，返回待渲染的 Object3D
+   * @param urls 需要在结束时 revoke 的 objectURL 列表
+   */
+  private async renderToBlob(
+    loadModel: () => Promise<THREE.Object3D>,
+    urls: string[],
+  ): Promise<Blob | null> {
     let model: THREE.Object3D | null = null
     try {
-      model = await this.loadModel(url)
+      model = await loadModel()
       this.scene.add(model)
-
       this.fitCameraToObject(model)
-
       this.renderer.render(this.scene, this.camera)
-      return new Promise((resolve) => {
-        this.renderer.domElement.toBlob((blob) => {
-          resolve(blob)
-        }, 'image/png', 0.85)
+      return await new Promise((resolve) => {
+        this.renderer.domElement.toBlob((blob) => resolve(blob), 'image/png', 0.85)
       })
-
     } catch (error) {
       console.error('生成缩略图失败:', error)
       return null
@@ -86,19 +90,27 @@ export class ThumbnailGenerator {
       // 深度清理资源
       if (model) {
         this.scene.remove(model)
-        this.cleanupModel(model); // 彻底释放显存
+        this.cleanupModel(model) // 彻底释放显存
       }
-      URL.revokeObjectURL(url)
+      urls.forEach((u) => URL.revokeObjectURL(u))
     }
   }
 
-  async generateWithObj(objFile: File, mtlFile: File|null): Promise<Blob | null> {
+  /** GLTF / GLB 缩略图 */
+  async generate(file: File): Promise<Blob | null> {
+    const url = URL.createObjectURL(file)
+    return this.renderToBlob(() => this.loadModel(url), [url])
+  }
+
+  /** OBJ（可选 MTL）缩略图 */
+  async generateWithObj(objFile: File, mtlFile: File | null): Promise<Blob | null> {
     const url = URL.createObjectURL(objFile)
-    let model: THREE.Object3D | null = null
-    try {
-      if(mtlFile) {
-        const mtlUrl = URL.createObjectURL(mtlFile);
-        model = await new Promise<THREE.Object3D>((resolve, reject) => {
+    const urls = [url]
+    return this.renderToBlob(() => {
+      if (mtlFile) {
+        const mtlUrl = URL.createObjectURL(mtlFile)
+        urls.push(mtlUrl)
+        return new Promise<THREE.Object3D>((resolve, reject) => {
           const mtlLoader = new MTLLoader()
           mtlLoader.load(mtlUrl, (materials) => {
             materials.preload()
@@ -107,30 +119,23 @@ export class ThumbnailGenerator {
             objLoader.load(url, resolve, undefined, reject)
           }, undefined, reject)
         })
-      }else {
-        model = await new Promise<THREE.Object3D>((resolve, reject) => {
-          new OBJLoader().load(url, resolve, undefined, reject)
-        })
       }
-      this.scene.add(model)
-      this.fitCameraToObject(model)
-      this.renderer.render(this.scene, this.camera)
-
-      // 现在这个 return 才能正确从 generateWithObj 返回
-      return new Promise((resolve) => {
-        this.renderer.domElement.toBlob((blob) => resolve(blob), 'image/png', 0.85)
+      return new Promise<THREE.Object3D>((resolve, reject) => {
+        new OBJLoader().load(url, resolve, undefined, reject)
       })
-    }catch(error) {
-      console.error('生成缩略图失败:', error)
-      return null
-    } finally {
-      // 深度清理资源
-      if (model) {
-        this.scene.remove(model)
-        this.cleanupModel(model); // 彻底释放显存
-      }
-      URL.revokeObjectURL(url)
-    }
+    }, urls)
+  }
+
+  /** FBX 缩略图 */
+  async generateWithFbx(file: File): Promise<Blob | null> {
+    const url = URL.createObjectURL(file)
+    return this.renderToBlob(
+      () => new Promise<THREE.Object3D>((resolve, reject) => {
+        // FBXLoader 回调直接返回 Group，无需取 .scene
+        new FBXLoader().load(url, resolve, undefined, reject)
+      }),
+      [url],
+    )
   }
 
   /**
