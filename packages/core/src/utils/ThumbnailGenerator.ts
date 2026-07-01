@@ -147,10 +147,8 @@ export class ThumbnailGenerator {
     const size = box.getSize(new THREE.Vector3())
     const center = box.getCenter(new THREE.Vector3())
 
-    // 居中模型
-    object.position.x += (object.position.x - center.x)
-    object.position.y += (object.position.y - center.y)
-    object.position.z += (object.position.z - center.z)
+    // 把中心移到原点（不依赖初始 position）
+    object.position.sub(center)
 
     const maxDim = Math.max(size.x, size.y, size.z)
     const fov = this.camera.fov * (Math.PI / 180)
@@ -161,6 +159,9 @@ export class ThumbnailGenerator {
     this.camera.position.copy(direction.multiplyScalar(cameraZ))
     this.camera.lookAt(0, 0, 0)
 
+    // 按模型尺寸更新 near/far，避免被裁剪
+    this.camera.near = Math.max(cameraZ / 1000, 0.01)
+    this.camera.far = cameraZ * 1000
     // 更新投影矩阵
     this.camera.updateProjectionMatrix()
   }
