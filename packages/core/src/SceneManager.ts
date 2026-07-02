@@ -47,6 +47,9 @@ export class SceneManager {
   private isReady: boolean = false
   private lastTime: number = 0
 
+  private rafId: number | null = null
+  private isDisposed: boolean = false
+
   private tweenGroup = new Group()
 
   environmentUrl: string | null = null
@@ -162,7 +165,8 @@ export class SceneManager {
    * @param time 动画帧间隔
    */
   animateFn(time: number) {
-    requestAnimationFrame(this.animate)
+    if (this.isDisposed) return
+    this.rafId = requestAnimationFrame(this.animate)
 
     const deltaTime = (time - this.lastTime) / 1000
     this.lastTime = time
@@ -680,5 +684,110 @@ export class SceneManager {
    */
   isPerspectiveView(): boolean {
     return this.viewManager.isPerspective
+  }
+
+  //  ========== 销毁 ================
+
+  /**
+   * 释放材质及其引用的纹理
+   */
+  private disposeMaterial(material: THREE.Material) {
+    material.dispose?.()
+    for (const key of Object.keys(material)) {
+      const value = material[key as keyof typeof material]
+      // 纹理对象具有 minFilter 属性，据此判断并释放
+      if (value && typeof value === 'object' && 'minFilter' in value) {
+        ;(value as THREE.Texture).dispose?.()
+      }
+    }
+  }
+
+  /**
+   * 递归释放物体的几何体与材质
+   */
+  private disposeObject(object: THREE.Object3D) {
+    object.traverse((child) => {
+      if (child instanceof THREE.Mesh) {
+        child.geometry?.dispose()
+        if (Array.isArray(child.material)) {
+          child.material.forEach((material) => {
+            if (material instanceof THREE.Material) this.disposeMaterial(material)
+          })
+        } else if (child.material instanceof THREE.Material) {
+          this.disposeMaterial(child.material)
+        }
+      }
+    })
+  }
+
+  /**
+   * 销毁场景管理器，释放所有资源
+   * 停止渲染循环、移除事件监听、销毁各子管理器，并释放 GPU 资源
+   */
+  dispose() {
+    if (this.isDisposed) return
+    this.isDisposed = true
+
+    // 停止渲染循环
+    if (this.rafId !== null) {
+      cancelAnimationFrame(this.rafId)
+      this.rafId = null
+    }
+
+    // 移除事件监听
+    this.canvas.removeEventListener('click', this._onCanvasClick)
+
+    // 销毁子管理器
+    this.controlManager.dispose()
+    this.viewManager.dispose()
+    this.triangleStatsManager.dispose()
+    this.statsManager.disable()
+
+    // 隐藏并释放 BVH Helper，销毁所有交互对象的 BVH
+    this.raycastManager.hideBVHHelpers(this.scene)
+    this.objects.forEach((object) => {
+      this.raycastManager.disposeBVH(object)
+    })
+
+    // 释放场景中所有物体的几何体与材质
+    this.disposeObject(this.scene)
+
+    // 释放辅助对象
+    if (this.gridHelper) {
+      this.scene.remove(this.gridHelper)
+      this.gridHelper.geometry?.dispose()
+      if (this.gridHelper.material instanceof THREE.Material) {
+        this.gridHelper.material.dispose()
+      }
+      this.gridHelper = null
+    }
+    if (this.axesHelper) {
+      this.scene.remove(this.axesHelper)
+      this.axesHelper.dispose()
+      this.axesHelper = null
+    }
+
+    // 释放环境贴图
+    if (this.scene.background instanceof THREE.Texture) {
+      this.scene.background.dispose()
+    }
+    if (this.scene.environment) {
+      this.scene.environment.dispose()
+      this.scene.environment = null
+    }
+
+    // 清空场景与对象集合
+    this.scene.clear()
+    this.objects.clear()
+
+    // 清理补间动画
+    this.tweenGroup.removeAll()
+
+    // 释放渲染器
+    this.renderer.dispose()
+    this.renderer.forceContextLoss()
+
+    // 清空事件订阅
+    this.events = {}
   }
 }

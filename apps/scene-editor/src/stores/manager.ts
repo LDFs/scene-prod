@@ -26,6 +26,7 @@ export const useManagerStore = defineStore('manager', () => {
   }
 
   function reset() {
+    sceneManager.value?.dispose()
     sceneManager.value = null;
     transformController.value = null;
     picker.value = null;
