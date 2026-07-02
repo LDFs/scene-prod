@@ -48,7 +48,7 @@ export function overlapTest(sceneManager: SceneManager, object: THREE.Object3D):
 }
 
 /**
- * 螺旋扫描，查找附近的空位置来放置物体
+ * 同心圆逐圈扫描，查找附近的空位置来放置物体
  * @param newMesh 要放置的物体
  * @param scene 场景
  * @param startPos 起始位置
@@ -59,7 +59,7 @@ export function findFreePosition(newMesh: THREE.Mesh, scene: THREE.Scene, startP
   const maxRadius = 20
 
   console.log('startPos: ', startPos);
-  // 螺旋形向外搜索
+  // 同心圆逐圈扫描搜索
   for (let r = 0; r <= maxRadius; r += step) {
     const angles =
       r === 0

@@ -137,6 +137,7 @@ async function uploadAsset(req: FastifyRequest, res: FastifyReply) {
 
     // 如果是模型类型，加入处理队列
     if (assetType === 'model') {
+      // 给队列添加处理器
       await assetQueue.add('process', { assetId: asset._id.toString() })
       console.log(`[Upload] 资产已加入处理队列: ${asset._id}`)
     }

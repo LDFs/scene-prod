@@ -159,8 +159,8 @@ async function send() {
           }
         }),
       )
-      const cmds = resolved.filter(Boolean) as ActualCommand[]
       // .filter(Boolean) 过滤掉无法执行的指令
+      const cmds = resolved.filter(Boolean) as ActualCommand[]
 
       if (cmds.length > 0) {
         const batch = new BatchCommand(cmds, parsed.explanation)

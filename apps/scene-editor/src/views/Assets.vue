@@ -119,13 +119,20 @@ const handleOneFile = async (file: File, files: FileList) => {
   uploadStatus.value = '正在处理...'
   try {
     const ext = file.name.split('.').pop()?.toLowerCase() ?? ''
+    uploadStatus.value = '正在生成缩略图...'
+    if (!thumbnailGenerator) {
+      thumbnailGenerator = new ThumbnailGenerator(100, 100)
+    }
     if (['gltf', 'glb'].includes(ext)) {
-      uploadStatus.value = '正在生成缩略图...'
       try {
-        if (!thumbnailGenerator) {
-          thumbnailGenerator = new ThumbnailGenerator(100, 100)
-        }
+        
         thumbnail = await thumbnailGenerator.generate(file)
+      } catch (error) {
+        console.error('生成缩略图失败:', error)
+      }
+    }else if(['fbx'].includes(ext)) {
+      try {
+        thumbnail = await thumbnailGenerator.generateWithFbx(file)
       } catch (error) {
         console.error('生成缩略图失败:', error)
       }
@@ -138,11 +145,7 @@ const handleOneFile = async (file: File, files: FileList) => {
           sameNameMtl = f
         }
       }
-      uploadStatus.value = '正在生成缩略图...'
       try {
-        if (!thumbnailGenerator) {
-          thumbnailGenerator = new ThumbnailGenerator(100, 100)
-        }
         thumbnail = await thumbnailGenerator.generateWithObj(file, sameNameMtl)
       } catch (error) {
         console.error('生成缩略图失败:', error)

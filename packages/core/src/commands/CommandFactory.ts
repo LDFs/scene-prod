@@ -30,7 +30,7 @@ export class AddObjectCommand implements AddCommand {
     // 检测是否发生了位置修正
     const finalPos = this.object.position
     const moved = originalPos.distanceTo(finalPos) > 0.01
-    console.log('--', originalPos, finalPos, moved);
+    console.log('--', originalPos, finalPos, moved)
     if (moved) {
       const fmt = (n: number) => parseFloat(n.toFixed(2))
       this.adjustmentNote =
@@ -308,7 +308,7 @@ export function fromAICommand(cmd: SceneCommand, sceneManager: SceneManager): Ac
       mesh.position.set(cmd.position?.x ?? 1, cmd.position?.y ?? 1, cmd.position?.z ?? 1)
       mesh.rotation.set(cmd.rotation?.x ?? 0, cmd.rotation?.y ?? 0, cmd.rotation?.z ?? 0)
       mesh.scale.set(cmd.scale.x ?? 1, cmd.scale.y ?? 1, cmd.scale.z ?? 1)
-      mesh.userData.isModelRoot = true  // 标记根节点
+      mesh.userData.isModelRoot = true // 标记根节点
 
       return new AddObjectCommand(sceneManager, mesh, cmd.allowOverlap)
     }

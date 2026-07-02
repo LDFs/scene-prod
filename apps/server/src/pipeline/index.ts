@@ -74,6 +74,7 @@ async function processAsset(asset: AssetWithId) {
   return context
 }
 
+// 给队列声明处理器
 assetQueue.process('process', async (job) => {
   const { assetId } = job.data
   let context = null

@@ -77,6 +77,7 @@ async function extractZip(context: ProcessAssetType) {
   }
 
   try {
+    // 顶层解压
     const zip = new AdmZip(inputPath)
     zip.extractAllTo(outputDir, true)
 

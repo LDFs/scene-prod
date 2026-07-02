@@ -72,9 +72,9 @@ export class RaycastManager {
    * 射线检测
    * @param screenPosition 屏幕位置
    * @param camera 相机
-   * @param targets 目标物体
+   * @param targets 场景中的全部物体
    * @param options 选项
-   * @returns 交点
+   * @returns 与射线相交的物体列表
    */
   raycast(screenPosition: THREE.Vector2, camera: THREE.Camera, targets: THREE.Object3D[], options: Record<string, any> = {}) {
     const {resursive = true} = options
@@ -86,9 +86,9 @@ export class RaycastManager {
   /**
    * 使用原始射线进行检测
    * @param ray 射线
-   * @param targets 目标物体
+   * @param targets 场景中的全部物体
    * @param options 选项
-   * @returns 交点
+   * @returns 与射线相交的物体列表
    */
   raycastWithRay(ray: THREE.Ray, targets: THREE.Object3D[], options: Record<string, any> = {}) {
     const {resursive = true} = options
@@ -101,7 +101,7 @@ export class RaycastManager {
    * @param screenPosition 屏幕位置
    * @param camera 相机
    * @param plane 平面
-   * @returns 交点
+   * @returns 与射线相交的物体列表
    */
   raycastPlane(screenPosition: THREE.Vector2, camera: THREE.Camera, plane: THREE.Plane) {
     // 根据 NDC 坐标和相机，计算出从相机出发的三维射线

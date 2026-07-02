@@ -251,7 +251,7 @@ export class SceneManager {
    * 射线检测物体
    * @param screenPosition 归一化屏幕坐标
    * @param options 选项
-   * @returns 交点
+   * @returns 与射线相交的物体列表
    */
   raycastObjects(screenPosition: THREE.Vector2, options: Record<string, any> = {}) {
     const { includeTileMap = true, ...raycastOptions } = options
