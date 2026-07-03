@@ -71,7 +71,7 @@ export class Picker {
 
   private getModelRoot(object: THREE.Object3D): THREE.Object3D {
     let current = object
-    while (current.parent && !current.userData.isModelRoot) {
+    while (current.parent && !current.userData.isModelRoot && current.parent !== this.sceneManager.scene) {
       current = current.parent
     }
     return current
