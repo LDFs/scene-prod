@@ -1,22 +1,15 @@
 // TODO: 封装 Raycaster，支持 BVH 加速 / 射线与平面相交 / 射线与物体相交 / 射线与几何体相交
 
 import * as THREE from 'three'
-import { MeshBVH, acceleratedRaycast, computeBoundsTree, disposeBoundsTree, BVHHelper } from 'three-mesh-bvh'
+import { MeshBVH, acceleratedRaycast, BVHHelper } from 'three-mesh-bvh'
 declare module 'three' {
   interface BufferGeometry {
     boundsTree?: MeshBVH
-    computeBoundsTree: typeof computeBoundsTree
-    disposeBoundsTree: typeof disposeBoundsTree
   }
   interface Raycaster {
     firstHitOnly?: boolean
   }
 }
-
-// 扩展 Mesh 的 raycast 方法使用 BVH 加速
-THREE.Mesh.prototype.raycast = acceleratedRaycast
-THREE.BufferGeometry.prototype.computeBoundsTree = computeBoundsTree
-THREE.BufferGeometry.prototype.disposeBoundsTree = disposeBoundsTree
 
 export class RaycastManager {
   private raycaster = new THREE.Raycaster()
@@ -24,7 +17,9 @@ export class RaycastManager {
   private bvhHelpers = new Map<THREE.BufferGeometry, BVHHelper>()
   private helperDepth = 10
   private helpersVisible = false
-  constructor() {}
+  constructor() {
+    this.raycaster.firstHitOnly = true; // 只取最近的交点，加速
+  }
   /**
    * 构建 BVH
    * @param object 需要构建 BVH 的物体
@@ -32,6 +27,8 @@ export class RaycastManager {
   buildBVH(object: THREE.Object3D) {
     object.traverse((child) => {
       if(child instanceof THREE.Mesh && child.geometry) {
+        // 只给该 mesh 实例覆盖 raycast，不污染 THREE.Mesh 原型
+        child.raycast = acceleratedRaycast
         this._buildGeometryBVH(child.geometry)
       }
     })
@@ -44,7 +41,8 @@ export class RaycastManager {
     if (this.builtGeometries.has(geometry)) return
     if (!geometry.attributes.position) return
     try {
-      geometry.computeBoundsTree?.()
+      // 直接构建并赋值，不依赖原型上的 computeBoundsTree
+      geometry.boundsTree = new MeshBVH(geometry)
       this.builtGeometries.add(geometry)
     } catch (error) {
       console.error('Error building BVH for geometry:', error)
@@ -119,7 +117,9 @@ export class RaycastManager {
   disposeBVH(object: THREE.Object3D) {
     object.traverse((child) => {
       if(child instanceof THREE.Mesh && child.geometry && child.geometry.boundsTree) {
-        child.geometry.disposeBoundsTree?.()
+        child.geometry.boundsTree = undefined
+        // 还原为原型上的默认 raycast
+        child.raycast = THREE.Mesh.prototype.raycast
         this.builtGeometries.delete(child.geometry)
       }
     })
