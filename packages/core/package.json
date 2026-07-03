@@ -6,16 +6,37 @@
   "type": "module",
   "main": "./index.ts",
   "types": "./index.ts",
+  "files": [
+    "dist"
+  ],
   "scripts": {
+    "build": "tsup",
+    "typecheck": "tsc --noEmit",
     "lint": "echo \"TODO: lint\""
   },
   "dependencies": {
     "@scene-prod/shared": "workspace:*",
-    "@tweenjs/tween.js": "^25.0.0",
+    "@tweenjs/tween.js": "^25.0.0"
+  },
+  "peerDependencies": {
     "three": "^0.181.2",
     "three-mesh-bvh": "^0.9.7"
   },
   "devDependencies": {
-    "@types/three": "^0.184.0"
+    "@types/three": "^0.184.0",
+    "three": "^0.181.2",
+    "three-mesh-bvh": "^0.9.7",
+    "tsup": "^8.0.0"
+  },
+  "publishConfig": {
+    "main": "./dist/index.js",
+    "module": "./dist/index.js",
+    "types": "./dist/index.d.ts",
+    "exports": {
+      ".": {
+        "types": "./dist/index.d.ts",
+        "import": "./dist/index.js"
+      }
+    }
   }
 }

@@ -378,12 +378,13 @@ export function fromAICommand(cmd: SceneCommand, sceneManager: SceneManager): Ac
         transparent: cmd.transparent ?? oldMat.transparent,
         wireframe: cmd.wireframe ?? oldMat.wireframe,
         flatShading: cmd.flatShading ?? oldMat.flatShading,
-        alphaTest: cmd.alphaTest ?? oldMat.alphaTest,
-        blending: cmd.blending ?? oldMat.blending,
-        side: cmd.side ?? oldMat.side,
-        depthTest: cmd.depthTest ?? oldMat.depthTest,
-        depthWrite: cmd.depthWrite ?? oldMat.depthWrite,
-        vertexColors: cmd.vertexColors ?? oldMat.vertexColors,
+        // schema 未暴露这些字段（AI 常用子集之外），沿用原材质值
+        alphaTest: oldMat.alphaTest,
+        blending: oldMat.blending,
+        side: oldMat.side,
+        depthTest: oldMat.depthTest,
+        depthWrite: oldMat.depthWrite,
+        vertexColors: oldMat.vertexColors,
       }
       return new MaterialObjectCommand(object, oldState, newState)
     }

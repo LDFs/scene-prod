@@ -17,8 +17,15 @@ const __dirname = dirname(fileURLToPath(import.meta.url))
 
 await connectDB()
 
+// CORS 允许源：从 CORS_ORIGINS 环境变量读取（逗号分隔）。
+// 同域 Nginx 反代部署时前端与 API 同源，可不设该变量（此时仅放行本地开发源）。
+const corsOrigins = (process.env.CORS_ORIGINS ?? 'http://localhost:5273,http://127.0.0.1:5273')
+  .split(',')
+  .map((s) => s.trim())
+  .filter(Boolean)
+
 await app.register(cors, {
-  origin: ['http://localhost:5273', 'http://127.0.0.1:5273'],
+  origin: corsOrigins,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
 })

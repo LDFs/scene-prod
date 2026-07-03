@@ -3,9 +3,7 @@
 import * as THREE from 'three'
 import { MeshBVH, acceleratedRaycast, BVHHelper } from 'three-mesh-bvh'
 declare module 'three' {
-  interface BufferGeometry {
-    boundsTree?: MeshBVH
-  }
+  // BufferGeometry.boundsTree 已由 three-mesh-bvh 自带类型声明，无需在此重复
   interface Raycaster {
     firstHitOnly?: boolean
   }

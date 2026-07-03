@@ -1,5 +1,6 @@
 import * as THREE from 'three'
 import { vec3Type } from '@scene-prod/shared'
+import type { SceneManager } from '../SceneManager'
 
 export function getXYZValueWithDefault(
   origin: vec3Type | undefined,
@@ -38,7 +39,7 @@ export function overlapTest(sceneManager: SceneManager, object: THREE.Object3D):
   const newBox = new THREE.Box3().setFromObject(object)
   let isOverlap = false
   for (const obj of sceneManager.scene.children) {
-    if (obj === object) return
+    if (obj === object) continue
     const existingBox = new THREE.Box3().setFromObject(obj)
     if (newBox.intersectsBox(existingBox)) {
       isOverlap = true

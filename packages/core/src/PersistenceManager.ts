@@ -100,6 +100,9 @@ export class PersistenceManager {
         // children: object.children?.map(child => this.serializeObject(child)),
       }
     } else {
+      const mesh = object as THREE.Mesh
+      const geometry = mesh.geometry as (THREE.BufferGeometry & { parameters?: Record<string, unknown> }) | undefined
+      const material = Array.isArray(mesh.material) ? mesh.material[0] : mesh.material
       return {
         id: object.uuid,
         sceneId: '',
@@ -111,10 +114,10 @@ export class PersistenceManager {
         rotation: { x: object.rotation.x, y: object.rotation.y, z: object.rotation.z },
         scale: { x: object.scale.x, y: object.scale.y, z: object.scale.z },
         geometry: {
-          type: object.geometry?.type || 'Unknown',
-          parameters: object.geometry?.parameters || {},
+          type: geometry?.type || 'Unknown',
+          parameters: geometry?.parameters || {},
         },
-        material: object.material?.toJSON() || {},
+        material: material?.toJSON() || {},
         // children: object.children?.map(child => this.serializeObject(child)),
       }
     }

@@ -38,10 +38,36 @@ services:
       # 容器内用服务名访问，端口是容器内端口（27017 / 6379，不是宿主机映射的那个）
       MONGODB_URL: mongodb://${MONGO_USER}:${MONGO_PASSWORD}@mongo:27017/scene-prod?authSource=admin
       REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379
-    ports:
-      - '3100:3100' # 只把对外的 HTTP 服务暴露出去
+      # 同域反代下前端与 API 同源，无需跨域；如前端另开域名，在此填写允许源（逗号分隔）
+      CORS_ORIGINS: ${CORS_ORIGINS:-}
+      QWEN_API_KEY: ${QWEN_API_KEY:-}
+      QWEN_BASE_URL: ${QWEN_BASE_URL:-}
+      QWEN_MODEL: ${QWEN_MODEL:-qwen-plus}
+      COS_SECRET_ID: ${COS_SECRET_ID:-}
+      COS_SECRET_KRY: ${COS_SECRET_KRY:-}
+    # 不再对外暴露 3100，仅通过 web(Nginx) 内网反代访问
+    expose:
+      - '3100'
     volumes:
       - uploads-data:/app/apps/server/uploads # 上传文件持久化
+    restart: unless-stopped
+
+  web:
+    build:
+      context: . # 同 server：上下文是仓库根目录
+      dockerfile: apps/scene-editor/Dockerfile
+      args:
+        # 同域部署走相对路径，留空即可
+        VITE_API_BASE_URL: ${VITE_API_BASE_URL:-}
+    container_name: scene-prod-web
+    depends_on:
+      - server
+    ports:
+      - '80:80'
+      - '443:443'
+    volumes:
+      # 把宿主机证书目录挂进去（需含 fullchain.pem / privkey.pem）
+      - ./certs:/etc/nginx/certs:ro
     restart: unless-stopped
 
 volumes:
