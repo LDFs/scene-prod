@@ -197,16 +197,51 @@ export class SceneManager {
     return this.controlManager.getMode()
   }
 
+  /**
+   * 客户端坐标(clientX/clientY) 转为归一化屏幕坐标 (-1 ~ 1)
+   * @param clientX 鼠标相对视口的 X 坐标
+   * @param clientY 鼠标相对视口的 Y 坐标
+   * @param target 复用的 Vector2，避免频繁分配
+   */
+  clientToNormalizedScreen(clientX: number, clientY: number, target = new THREE.Vector2()): THREE.Vector2 {
+    const rect = this.canvas.getBoundingClientRect()
+    target.set(
+      ((clientX - rect.left) / rect.width) * 2 - 1,
+      (-(clientY - rect.top) / rect.height) * 2 + 1,
+    )
+    return target
+  }
+
+  /**
+   * 计算放置对象的世界坐标：优先命中已有物体表面，否则落到地面，最后回退到原点
+   * @param clientX 鼠标相对视口的 X 坐标
+   * @param clientY 鼠标相对视口的 Y 坐标
+   * @param options recursive - 是否递归检测子对象，默认 true
+   */
+  getPlacementPosition(clientX: number, clientY: number, options: { recursive?: boolean } = {}): THREE.Vector3 {
+    const screen = this.clientToNormalizedScreen(clientX, clientY)
+    const intersects = this.raycastObjects(screen, { recursive: options.recursive ?? true })
+    if (intersects.length > 0) return intersects[0].point.clone()
+    return this.raycastGround(screen) || new THREE.Vector3(0, 0, 0)
+  }
+
+  /**
+   * 将对象放到世界坐标，自动叠加 userData.groundOffset（基础几何体离地偏移）
+   * @param object 需要放置的对象
+   * @param position 目标世界坐标
+   */
+  placeObjectAt(object: THREE.Object3D, position: THREE.Vector3): void {
+    object.position.copy(position)
+    if (object.userData.groundOffset) {
+      object.position.y += object.userData.groundOffset
+    }
+  }
+
   _onCanvasClickFn(e: MouseEvent) {
     // 只处理左键点击
     if (e.button !== 0) return
-    // 获取画布位置
-    const rect = this.canvas.getBoundingClientRect()
-    // 获取点击的屏幕位置
-    const screenPosition = new THREE.Vector2(
-      ((e.clientX - rect.left) / rect.width) * 2 - 1,
-      (-(e.clientY - rect.top) / rect.height) * 2 + 1,
-    )
+    // 获取点击的归一化屏幕位置
+    const screenPosition = this.clientToNormalizedScreen(e.clientX, e.clientY)
     const raycastTargets = [...this.objects]
     const intersects = this.raycastManager.raycast(screenPosition, this.camera, raycastTargets)
 

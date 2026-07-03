@@ -42,9 +42,7 @@ export class Picker {
     const dy = event.clientY - this.pointerDownPos.y
     if (Math.sqrt(dx * dx + dy * dy) > this.DRAG_THRESHOLD) return
 
-    const rect = this.canvas.getBoundingClientRect()
-    this.mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1
-    this.mouse.y = (-(event.clientY - rect.top) / rect.height) * 2 + 1
+    this.sceneManager.clientToNormalizedScreen(event.clientX, event.clientY, this.mouse)
     const intersects = this.sceneManager.raycastObjects(this.mouse, { recursive: true })
 
     if (intersects.length > 0) {
@@ -57,9 +55,7 @@ export class Picker {
   onRightPointerDown(event: PointerEvent) {
     if (event.button !== 2) return
 
-    const rect = this.canvas.getBoundingClientRect()
-    this.mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1
-    this.mouse.y = (-(event.clientY - rect.top) / rect.height) * 2 + 1
+    this.sceneManager.clientToNormalizedScreen(event.clientX, event.clientY, this.mouse)
 
     // 命中模型时，将其包围盒中心作为本次右键旋转的轴心
     const intersects = this.sceneManager.raycastObjects(this.mouse, { recursive: true })

@@ -10,6 +10,15 @@ import { DBManager } from './DBManager'
 import type { SerializedObject, SceneMetadata, Asset } from '@scene-prod/shared'
 import { IEditorAdapter } from './adapter'
 import { getXYZValueWithDefault } from './utils/sceneTools'
+import { createPrimitive, type PrimitiveType } from './utils/objectFactory'
+
+/**
+ * 创建对象的描述符，供 createObject 派发使用
+ */
+export type ObjectDescriptor =
+  | { kind: 'gltf'; url: string; name?: string; normalizeScale?: number }
+  | { kind: 'obj'; url: string; name?: string; material?: Asset | null }
+  | { kind: 'primitive'; primitive: PrimitiveType }
 
 /**
  * 序列化、反序列化对象
@@ -247,6 +256,29 @@ export class PersistenceManager {
         reject(new Error('模型加载失败'))
       }
     })
+  }
+
+  /**
+   * 根据描述符创建对象，统一 GLTF / OBJ / 基础几何体的创建入口
+   * 只负责创建，不负责放置到场景中（放置由 SceneManager.placeObjectAt 与 AddObjectCommand 处理）
+   * @param descriptor 对象描述符
+   * @returns 创建的对象，类型不支持时返回 null
+   */
+  async createObject(descriptor: ObjectDescriptor): Promise<THREE.Object3D | null> {
+    switch (descriptor.kind) {
+      case 'gltf': {
+        const object = await this.loadGLTFModel(descriptor.url, descriptor.name)
+        // 首次实例化时把模型换算到米制（之后会随 scale 一并保存，重载场景不再重复应用）
+        if (object && descriptor.normalizeScale && descriptor.normalizeScale !== 1) {
+          object.scale.multiplyScalar(descriptor.normalizeScale)
+        }
+        return object
+      }
+      case 'obj':
+        return this.loadModel(descriptor.url, descriptor.material ?? null)
+      case 'primitive':
+        return createPrimitive(descriptor.primitive)
+    }
   }
 
   /**
