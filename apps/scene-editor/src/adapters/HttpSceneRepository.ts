@@ -1,15 +1,22 @@
-// TODO: 数据库管理器，管理数据库的连接和查询
-
+import { ISceneRepository } from '@scene-prod/core'
 import type { SceneData, SceneResponse } from '@scene-prod/shared'
 
-export class DBManager {
-  private apiBaseURL: string = ''
+/**
+ * 基于 HTTP/REST 的场景仓储实现
+ *
+ * 这是 core 中 ISceneRepository 的宿主侧具体实现，封装了后端 API 的
+ * 传输协议、端点约定与响应解析。core 只依赖抽象，不感知这些细节。
+ */
+export class HttpSceneRepository extends ISceneRepository {
+  private apiBaseURL: string
+
   constructor(url: string) {
-    this.apiBaseURL = url || 'http://localhost:3001/api/scene-prod'
+    super()
+    this.apiBaseURL = url || 'http://localhost:3100/api/scene-prod'
   }
 
   /**
-   * 初始化数据库
+   * 初始化仓储
    * 对于 API 模式，这里只是占位符
    * @returns 是否成功
    */
@@ -106,7 +113,7 @@ export class DBManager {
 
   async clearAllObjects(sceneId = 'default'): Promise<boolean> {
     try {
-      const response = await fetch(`${this.apiBaseURL}/scene/clear?sceneId=${sceneId}`,  {
+      const response = await fetch(`${this.apiBaseURL}/scene/clear?sceneId=${sceneId}`, {
         method: 'DELETE'
       })
       const data = await response.json()
@@ -114,7 +121,7 @@ export class DBManager {
         console.error('清除场景对象失败:', data.message)
         return false
       }
-    }catch (error) {
+    } catch (error) {
       console.error('清除场景对象失败:', error)
       return false
     }

@@ -23,6 +23,7 @@ import { API_BASE_URL } from '@root/config.ts'
 import { SceneManager, PersistenceManager } from '@scene-prod/core'
 import { useEditorCoreStore } from '@/stores/editorCore'
 import { EditorStoreAdapter } from '@/adapters/EditorStoreAdapter'
+import { HttpSceneRepository } from '@/adapters/HttpSceneRepository'
 
 const route = useRoute()
 const container = ref<HTMLDivElement | null>(null)
@@ -41,7 +42,7 @@ onMounted(async () => {
   // 但不创建 TransformController / Picker，因此场景里没有任何编辑器辅助对象或拾取交互
   persistenceManager = new PersistenceManager(
     sceneManager,
-    { dbUrl: API_BASE_URL },
+    new HttpSceneRepository(API_BASE_URL),
     new EditorStoreAdapter(),
   )
 

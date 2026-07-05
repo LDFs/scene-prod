@@ -21,6 +21,7 @@ import {
 import { useEditorCoreStore } from '@/stores/editorCore'
 import { useManagerStore } from '@/stores/manager'
 import { EditorStoreAdapter } from '@/adapters/EditorStoreAdapter'
+import { HttpSceneRepository } from '@/adapters/HttpSceneRepository'
 import { useHistoryStore } from '@/stores/history'
 import { getAssetByName, getModelUrl } from '@/services/asset'
 
@@ -94,9 +95,7 @@ onMounted(async () => {
   sceneManager = new SceneManager(canvas.value as HTMLCanvasElement)
   persistenceManager = new PersistenceManager(
     sceneManager,
-    {
-      dbUrl: API_BASE_URL,
-    },
+    new HttpSceneRepository(API_BASE_URL),
     editorAdapter,
   )
 

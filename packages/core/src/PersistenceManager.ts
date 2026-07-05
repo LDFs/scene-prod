@@ -6,9 +6,8 @@ import { OBJLoader } from 'three/examples/jsm/loaders/OBJLoader.js'
 import { MTLLoader } from 'three/examples/jsm/loaders/MTLLoader.js'
 import * as SkeletonUtils from 'three/examples/jsm/utils/SkeletonUtils.js'
 import { SceneManager } from './SceneManager'
-import { DBManager } from './DBManager'
 import type { SerializedObject, SceneMetadata, Asset } from '@scene-prod/shared'
-import { IEditorAdapter } from './adapter'
+import { IEditorAdapter, ISceneRepository } from './adapter'
 import { getXYZValueWithDefault } from './utils/sceneTools'
 import { createPrimitive, type PrimitiveType } from './utils/objectFactory'
 
@@ -38,30 +37,31 @@ export class PersistenceManager {
   private gltfLoader: GLTFLoader = new GLTFLoader()
   private modelCache: Map<string, THREE.Group> = new Map()
   private currentSceneId: string = 'default'
-  private dbManager: DBManager | null = null
+  private repository: ISceneRepository | null = null
   private editorAdapter: IEditorAdapter | null = null
 
   constructor(
     sceneManager: SceneManager,
+    repository: ISceneRepository,
+    editorAdapter: IEditorAdapter,
     options: {
       dracoPath?: string
-      dbUrl?: string
-    },
-    editorAdapter: IEditorAdapter,
+    } = {},
   ) {
     this.sceneManager = sceneManager
 
     const dracoLoader = new DRACOLoader()
     dracoLoader.setDecoderPath(options.dracoPath || PersistenceManager.dracoPath)
+    // 这样就可以加载被压缩的模型
     this.gltfLoader.setDRACOLoader(dracoLoader)
 
-    this.dbManager = new DBManager(options.dbUrl || 'http://localhost:3001/api')
+    this.repository = repository
     this.editorAdapter = editorAdapter
   }
 
   async init(sceneId: string) {
     this.currentSceneId = sceneId
-    await this.dbManager?.init()
+    await this.repository?.init()
     await this.loadScene(sceneId)
   }
 
@@ -72,7 +72,7 @@ export class PersistenceManager {
    */
   async initPublic(sceneId: string): Promise<boolean> {
     this.currentSceneId = sceneId
-    await this.dbManager?.init()
+    await this.repository?.init()
     const sceneData = await this.loadScene(sceneId, true)
     // null 表示场景不存在或未发布，viewer 据此展示错误态
     return !!sceneData
@@ -448,8 +448,8 @@ export class PersistenceManager {
     this.currentSceneId = sceneId || this.currentSceneId
 
     const sceneData = isPublic
-      ? await this.dbManager?.getPublicSceneData(this.currentSceneId)
-      : await this.dbManager?.getSceneData(this.currentSceneId)
+      ? await this.repository?.getPublicSceneData(this.currentSceneId)
+      : await this.repository?.getSceneData(this.currentSceneId)
 
     this.sceneManager?.clearScene()
     // this.editorAdapter?.resetObjects()
@@ -516,7 +516,7 @@ export class PersistenceManager {
     const environmentUrl = this.sceneManager?.environmentUrl || null
 
     console.log('serializedObjects-', serializedObjects)
-    const result = await this.dbManager?.saveScene({
+    const result = await this.repository?.saveScene({
       objects: serializedObjects,
       sceneId: this.currentSceneId,
       name: storeData.name || '未命名',
@@ -550,7 +550,7 @@ export class PersistenceManager {
 
   async clearScene() {
     if (!this.currentSceneId) return
-    await this.dbManager?.clearAllObjects(this.currentSceneId)
+    await this.repository?.clearAllObjects(this.currentSceneId)
     this.objectMap.clear()
     this.sceneManager?.clearScene()
   }
