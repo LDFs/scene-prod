@@ -31,6 +31,14 @@ export class PersistenceManager {
     PersistenceManager.dracoPath = path.endsWith('/') ? path : path + '/'
   }
 
+  // 需要跟踪/持久化的材质属性
+  private static readonly MATERIAL_COLOR_KEYS = ['color', 'emissive'] as const
+  private static readonly MATERIAL_SCALAR_KEYS = [
+    'roughness', 'metalness', 'emissiveIntensity', 'opacity', 'alphaTest',
+    'blending', 'side', 'transparent', 'depthTest', 'depthWrite',
+    'vertexColors', 'wireframe', 'flatShading',
+  ] as const
+
   private sceneManager: SceneManager | null = null
   private objectMap: Map<string, string> = new Map()
   private gltfLoader: GLTFLoader = new GLTFLoader()
@@ -95,6 +103,7 @@ export class PersistenceManager {
         rotation: { x: object.rotation.x, y: object.rotation.y, z: object.rotation.z },
         scale: { x: object.scale.x, y: object.scale.y, z: object.scale.z },
         modifications: this.extractModifications(object),
+        modelVersion: this.computeModelFingerprint(object),
         // children: object.children?.map(child => this.serializeObject(child)),
       }
     } else {
@@ -139,6 +148,16 @@ export class PersistenceManager {
       ;({ x, y, z } = getXYZValueWithDefault(data.scale, 1))
       model.scale.set(x, y, z)
       if (data.modifications) {
+        // 源模型可能已被重新导出，导致 modifications 的索引路径失配
+        if (data.modelVersion) {
+          const currentVersion = this.computeModelFingerprint(model)
+          if (currentVersion !== data.modelVersion) {
+            console.warn(
+              `⚠️ 模型 "${data.name}" 的源文件结构已变更（保存时 ${data.modelVersion}，当前 ${currentVersion}），` +
+                `子节点修改可能应用到错误的节点上。源: ${data.url}`,
+            )
+          }
+        }
         this.applyModifications(model, data.modifications)
       }
       return model
@@ -198,6 +217,13 @@ export class PersistenceManager {
           model.userData.modelType = 'GLTF'
           model.userData.modelUrl = url
           model.userData.isModelRoot = true  // 标记根节点
+          // 记录各网格材质的原始快照，供保存时按需只存"改动了的字段"
+          model.traverse((child) => {
+            if (child instanceof THREE.Mesh && child.material) {
+              const materials = Array.isArray(child.material) ? child.material : [child.material]
+              child.userData.materialBaseline = materials.map((m) => this.snapshotMaterial(m))
+            }
+          })
           name && (model.name = name)
           if (model instanceof THREE.Group) {
             resolve(model)
@@ -272,6 +298,49 @@ export class PersistenceManager {
   }
 
   /**
+   * 提取单个材质中需要跟踪的属性，颜色类转为 #rrggbb 字符串
+   */
+  private snapshotMaterial(material: THREE.Material): Record<string, any> {
+    const mat = material as any
+    const snap: Record<string, any> = {}
+    for (const key of PersistenceManager.MATERIAL_COLOR_KEYS) {
+      if (mat[key]) snap[key] = '#' + mat[key].getHexString()
+    }
+    for (const key of PersistenceManager.MATERIAL_SCALAR_KEYS) {
+      if (mat[key] !== undefined) snap[key] = mat[key]
+    }
+    return snap
+  }
+
+  /**
+   * 对比当前材质快照与原始快照，只返回发生变化的字段；无变化返回 null
+   */
+  private diffMaterialSnapshot(
+    current: Record<string, any>,
+    baseline: Record<string, any>,
+  ): Record<string, any> | null {
+    const diff: Record<string, any> = {}
+    for (const key of Object.keys(current)) {
+      if (current[key] !== baseline[key]) diff[key] = current[key]
+    }
+    return Object.keys(diff).length ? diff : null
+  }
+
+  /**
+   * 将一组材质属性应用到材质上（颜色类走 .set，其余直接赋值）
+   */
+  private applyMaterialProps(material: THREE.Material, props: Record<string, any>) {
+    const mat = material as any
+    for (const key of PersistenceManager.MATERIAL_COLOR_KEYS) {
+      if (props[key] !== undefined && mat[key]) mat[key].set(props[key])
+    }
+    for (const key of PersistenceManager.MATERIAL_SCALAR_KEYS) {
+      if (props[key] !== undefined) mat[key] = props[key]
+    }
+    mat.needsUpdate = true
+  }
+
+  /**
    * 提取 GLTF 对象的修改记录, 用于存储在数据库中
    * @param object 需要提取修改的对象
    * @returns 修改的记录
@@ -303,30 +372,52 @@ export class PersistenceManager {
             modifications[path].scale = { x: child.scale.x, y: child.scale.y, z: child.scale.z }
           }
           if (child.userData.materialModified && child.material) {
-            modifications[path].material = {
-              // 将颜色(color: Color {isColor: true, r: 0.10946171076915331, g: 0.9911020971136257, b: 0.6724431569510133})转换为十六进制字符串
-              color: child.material.color ? '#' + child.material.color.getHexString() : undefined,
-              roughness: child.material.roughness,
-              metalness: child.material.metalness,
-              emissive: child.material.emissive ? '#' + child.material.emissive.getHexString() : undefined,
-              emissiveIntensity: child.material.emissiveIntensity,
-              opacity: child.material.opacity,
-              alphaTest: child.material.alphaTest,
-              blending: child.material.blending,
-              side: child.material.side,
-              transparent: child.material.transparent,
-              depthTest: child.material.depthTest,
-              depthWrite: child.material.depthWrite,
-              vertexColors: child.material.vertexColors,
-              wireframe: child.material.wireframe,
-              flatShading: child.material.flatShading,
+            const baseline = child.userData.materialBaseline as Record<string, any>[] | undefined
+            if (Array.isArray(child.material)) {
+              // 多材质：按材质索引分别只存改动了的字段
+              const materials: Record<string, any> = {}
+              child.material.forEach((m, i) => {
+                const diff = this.diffMaterialSnapshot(this.snapshotMaterial(m), baseline?.[i] ?? {})
+                if (diff) materials[i] = diff
+              })
+              if (Object.keys(materials).length) modifications[path].materials = materials
+            } else {
+              // 单材质：只存相对原始快照发生变化的字段
+              const diff = this.diffMaterialSnapshot(this.snapshotMaterial(child.material), baseline?.[0] ?? {})
+              if (diff) modifications[path].material = diff
             }
+          }
+
+          // 若最终没有任何实际改动（如改回原值），不写入该路径
+          if (Object.keys(modifications[path]).length === 0) {
+            delete modifications[path]
           }
         }
       }
     })
     console.log('序列化模型的修改：', modifications)
     return modifications
+  }
+
+  /**
+   * 计算源模型的结构指纹。
+   * 按遍历顺序对每个节点的「类型 + 子节点数」做哈希，反映 modifications 索引路径所依赖的
+   * 节点树结构与顺序；源文件被重新导出/节点增删重排时指纹会变化。
+   * @param root 模型根对象
+   * @returns 8 位十六进制指纹字符串
+   */
+  computeModelFingerprint(root: THREE.Object3D): string {
+    let hash = 0x811c9dc5 // FNV-1a 32bit 偏移基
+    const feed = (str: string) => {
+      for (let i = 0; i < str.length; i++) {
+        hash ^= str.charCodeAt(i)
+        hash = Math.imul(hash, 0x01000193) >>> 0
+      }
+    }
+    root.traverse((node) => {
+      feed(`${node.type}:${node.children.length};`)
+    })
+    return (hash >>> 0).toString(16).padStart(8, '0')
   }
 
   /**
@@ -351,7 +442,7 @@ export class PersistenceManager {
   }
 
   /**
-   * 应用修改的记录到根对象
+   * 应用修改的记录到对象
    * @param rootObject 根对象
    * @param modifications 修改的记录
    */
@@ -376,28 +467,23 @@ export class PersistenceManager {
           child.scale.set(mods.scale.x, mods.scale.y, mods.scale.z)
           child.userData.scaleModified = true
         }
-        if (mods.material && child instanceof THREE.Mesh && child.material) {
-          if (mods.material.color !== undefined) child.material.color.set(mods.material.color)
-          if (mods.material.roughness !== undefined) child.material.roughness = mods.material.roughness
-          if (mods.material.metalness !== undefined) child.material.metalness = mods.material.metalness
-          if (mods.material.emissive !== undefined && child.material.emissive)
-            child.material.emissive.set(mods.material.emissive)
-          if (mods.material.emissiveIntensity !== undefined)
-            child.material.emissiveIntensity = mods.material.emissiveIntensity
-          if (mods.material.opacity !== undefined) child.material.opacity = mods.material.opacity
-          if (mods.material.alphaTest !== undefined) child.material.alphaTest = mods.material.alphaTest
-
-          if (mods.material.blending !== undefined) child.material.blending = mods.material.blending
-          if (mods.material.side !== undefined) child.material.side = mods.material.side
-          if (mods.material.transparent !== undefined) child.material.transparent = mods.material.transparent
-          if (mods.material.depthTest !== undefined) child.material.depthTest = mods.material.depthTest
-          if (mods.material.depthWrite !== undefined) child.material.depthWrite = mods.material.depthWrite
-          if (mods.material.vertexColors !== undefined) child.material.vertexColors = mods.material.vertexColors
-          if (mods.material.wireframe !== undefined) child.material.wireframe = mods.material.wireframe
-          if (mods.material.flatShading !== undefined) child.material.flatShading = mods.material.flatShading
-
-          child.material.needsUpdate = true
-          child.userData.materialModified = true
+        if (child instanceof THREE.Mesh && child.material) {
+          // 单材质（含旧数据的 material 字段）：应用到单材质或数组的首个材质
+          if (mods.material) {
+            const target = Array.isArray(child.material) ? child.material[0] : child.material
+            if (target) {
+              this.applyMaterialProps(target, mods.material)
+              child.userData.materialModified = true
+            }
+          }
+          // 多材质：按索引应用
+          if (mods.materials && Array.isArray(child.material)) {
+            for (const [i, props] of Object.entries(mods.materials)) {
+              const target = child.material[Number(i)]
+              if (target) this.applyMaterialProps(target, props as Record<string, any>)
+            }
+            child.userData.materialModified = true
+          }
         }
       }
     }

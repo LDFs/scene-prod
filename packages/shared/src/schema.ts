@@ -37,6 +37,8 @@ export const SerializedObjectSchema = z.object({
   scale: Vec3Schema,
   modificationTime: z.number().optional(),
   modifications: z.record(z.string(), z.any()).optional(),
+  // 源模型的结构指纹，加载时比对以检测源文件是否已变更（导致 modifications 路径失配）
+  modelVersion: z.string().optional(),
   geometry: z.object({
     type: z.string(),
     parameters: z.record(z.string(), z.any()),
