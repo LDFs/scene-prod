@@ -4,7 +4,6 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
 import { DRACOLoader } from 'three/examples/jsm/loaders/DRACOLoader.js'
 import { OBJLoader } from 'three/examples/jsm/loaders/OBJLoader.js'
 import { MTLLoader } from 'three/examples/jsm/loaders/MTLLoader.js'
-import * as SkeletonUtils from 'three/examples/jsm/utils/SkeletonUtils.js'
 import { SceneManager } from './SceneManager'
 import type { SerializedObject, SceneMetadata, Asset } from '@scene-prod/shared'
 import { IEditorAdapter, ISceneRepository } from './adapter'
@@ -35,7 +34,6 @@ export class PersistenceManager {
   private sceneManager: SceneManager | null = null
   private objectMap: Map<string, string> = new Map()
   private gltfLoader: GLTFLoader = new GLTFLoader()
-  private modelCache: Map<string, THREE.Group> = new Map()
   private currentSceneId: string = 'default'
   private repository: ISceneRepository | null = null
   private editorAdapter: IEditorAdapter | null = null
@@ -188,14 +186,6 @@ export class PersistenceManager {
   }
 
   async loadGLTFModel(url: string, name?: string): Promise<THREE.Group> {
-    if (this.modelCache.has(url)) {
-      const model = this.modelCache.get(url)!
-      if (model instanceof THREE.Group) {
-        return model
-      } else {
-        return SkeletonUtils.clone(model) as THREE.Group
-      }
-    }
     return new Promise((resolve, reject) => {
       this.gltfLoader.load(
         url,
@@ -209,10 +199,8 @@ export class PersistenceManager {
           model.userData.modelUrl = url
           model.userData.isModelRoot = true  // 标记根节点
           name && (model.name = name)
-          this.modelCache.set(url, model)
-          const cloned = SkeletonUtils.clone(model)
-          if (cloned instanceof THREE.Group) {
-            resolve(cloned)
+          if (model instanceof THREE.Group) {
+            resolve(model)
           } else {
             reject(new Error('模型加载失败'))
           }
@@ -252,9 +240,8 @@ export class PersistenceManager {
     }
     model.userData.isModelRoot = true  // 标记根节点
     return new Promise((resolve, reject) => {
-      const cloned = SkeletonUtils.clone(model)
-      if (cloned instanceof THREE.Group) {
-        resolve(cloned)
+      if (model instanceof THREE.Group) {
+        resolve(model)
       } else {
         reject(new Error('模型加载失败'))
       }
@@ -344,22 +331,21 @@ export class PersistenceManager {
 
   /**
    * 获取对象相对于根节点的路径
+   * 一律使用子节点在父 children 中的索引（child_<index>），而非名称：
+   * 同一源模型多次加载时索引是稳定且唯一的，可避免 GLTF 同级重名/空名带来的匹配歧义。
    * @param object 需要获取路径的对象
    * @param root 根对象
-   * @returns 路径
+   * @returns 路径 (例如: 'child_0/child_2/child_1')
    */
   getObjectPath(object: THREE.Object3D, root: THREE.Object3D): string {
-    const path = []
+    const path: string[] = []
     let current: THREE.Object3D | null = object
     while (current && current !== root) {
-      if (current.name) {
-        path.unshift(current.name)
-      } else {
-        // 如果没有名称，使用索引作为路径的一部分
-        const index = current.parent?.children.indexOf(current) || 0
-        path.unshift(`child_${index}`)
-      }
-      current = current.parent || null
+      const parent: THREE.Object3D | null = current.parent
+      const index = parent ? parent.children.indexOf(current) : -1
+      // current 一定是其 parent 的 child，index 正常不会为 -1；兜底为 0
+      path.unshift(`child_${index >= 0 ? index : 0}`)
+      current = parent || null
     }
     return path.join('/')
   }
@@ -419,6 +405,8 @@ export class PersistenceManager {
 
   /**
    * 根据路径查找对象, 用于应用修改的记录
+   * 新数据的路径段均为 child_<index>（走索引查找，无歧义）；
+   * 非 child_ 段为历史遗留的按名称路径，仅作向后兼容保留。
    * @param rootObject 根对象
    * @param path 路径 (例如: 'child_0/child_1')
    * @returns 找到的对象或 null
@@ -431,6 +419,7 @@ export class PersistenceManager {
         const index = parseInt(part.split('_')[1])
         current = current.children?.[index] || null
       } else {
+        // 兼容旧数据：按名称匹配（可能因同级重名而命中第一个）
         current = current.children?.find((child) => child.name === part) || null
       }
       if (!current) return null
