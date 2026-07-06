@@ -90,14 +90,18 @@ const loading = ref(false);
 const loadAssets = async () => {
   loading.value = true;
   try {
-    const [modelAssets, envAssets, tilesetAssets] = await Promise.all([
+    const all = [models, environments, tilesets]
+    await Promise.allSettled([
       getAssets('model'),
       getAssets('hdri'),
       getAssets('tileset')
-    ]);
-    models.value = modelAssets.assets;
-    environments.value = envAssets.assets;
-    tilesets.value = tilesetAssets.assets;
+    ]).then((results) => {
+      results.forEach((result, index) => {
+        if(result.status === 'fulfilled'){
+          all[index].value = result.value.assets
+        }
+      })
+    })
   } catch (error) {
     console.error('加载资产失败:', error);
   } finally {
@@ -110,7 +114,7 @@ const onDragStart = (event: DragEvent, type: string, model?: AssetWithId) => {
   event.dataTransfer?.setData('type', type);
   if(!model) return
   const url = getAssetUrl(model)
-    console.log("url--", url, model, model.sizing?.normalizeScale)
+  console.log("url--", url, model, model.sizing?.normalizeScale)
 
   if (url) {
     // 'url'是 DataTransfer API 中的保留格式名，它的格式需要为合法的绝对URI(以http:// 或 https:// 等开头)，否则浏览器会认为这不是合法的URI，会默认丢弃这个值

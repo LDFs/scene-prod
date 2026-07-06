@@ -29,6 +29,8 @@
           </div>
         </div>
         <div class="scene-actions">
+          <button class="action-btn delete-btn" @click.stop="copySceneLink(scene)" title="复制链接分享">🔗</button>
+          <button class="action-btn delete-btn" @click.stop="previewScene(scene)" title="预览">预览</button>
           <button class="action-btn delete-btn" @click.stop="handleDelete(scene)" title="删除">
             🗑️
           </button>
@@ -102,6 +104,8 @@ import { getScenes, createScene, deleteScene } from '../services/api';
 import { useRouter } from 'vue-router';
 import type { SceneData } from '@scene-prod/shared';
 import type { Pagination, NewScene } from '../types/scenes';
+import { ElMessage } from 'element-plus'
+import 'element-plus/es/components/message/style/css'
 
 const router = useRouter();
 const scenes = ref<SceneData[]>([]);
@@ -136,7 +140,7 @@ const enterScene = (sceneId: string) => {
 }
 
 const handleCreate = async () => {
-  if (!newScene.value) {
+  if (!newScene.value.name) {
     return;
   }
   try {
@@ -170,6 +174,22 @@ const handleDelete = async (scene: SceneData) => {
 onMounted(async () => {
   await loadScenes(1)
 })
+
+const copySceneLink = async (scene: SceneData) => {
+  const shareUrl = `${window.location.origin}/view/${scene.sceneId}`
+  try {
+    await navigator.clipboard.writeText(shareUrl)
+    ElMessage({ message: `分享链接已复制：${shareUrl}`, type: 'success' })
+  } catch {
+    // 剪贴板不可用（如非 HTTPS 环境）时，至少把链接展示出来
+    ElMessage({ message: `分享链接：${shareUrl}`, type: 'success' })
+  }
+}
+
+const previewScene = (scene: SceneData) => {
+  const shareUrl = `${window.location.origin}/view/${scene.sceneId}`
+  window.open(shareUrl, '_blank')
+}
 
 
 const formatDate = (date: number) => {

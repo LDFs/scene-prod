@@ -643,8 +643,13 @@ export class SceneManager {
           size = Math.max(size, 10)
         }
       }
-      // 每格 1 单位
-      const segments = size
+      // 格子数固定在约 40 格，格子边长随场景缩放并取好看的量级（1/2/5 × 10^n），
+      // 避免大场景下每格恒为 1 单位导致网格过密
+      const targetDivisions = 40
+      const rawStep = size / targetDivisions
+      const pow = Math.pow(10, Math.floor(Math.log10(rawStep)))
+      const step = ([1, 2, 5, 10].find((m) => m * pow >= rawStep) ?? 10) * pow
+      const segments = Math.max(1, Math.round(size / step))
       this.setGridHelper(true, size, size, segments, segments)
     } else {
       this.setGridHelper(false, 0, 0, 0, 0)

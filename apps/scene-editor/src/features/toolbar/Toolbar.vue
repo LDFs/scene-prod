@@ -2,13 +2,13 @@
   <!-- TODO: 顶栏工具条（撤销/重做/保存/预览） -->
   <div class="toolbar">
     <div class="group">
-      <button @click="setMode('translate')">移动</button>
-      <button @click="setMode('rotate')">旋转</button>
-      <button @click="setMode('scale')">缩放</button>
+      <button @click="setMode('translate')" title="移动(M)">移动</button>
+      <button @click="setMode('rotate')" title="旋转(R)">旋转</button>
+      <button @click="setMode('scale')" title="缩放(S)">缩放</button>
     </div>
     <div class="group">
-      <button @click="undo">撤销</button>
-      <button @click="redo">重做</button>
+      <button @click="undo" title="撤销(Ctrl+Z)">撤销</button>
+      <button @click="redo" title="重做(Ctrl+Y)">重做</button>
     </div>
 
     <!-- 视图切换 -->
@@ -22,23 +22,15 @@
     </div>
 
     <div class="group">
-      <button
-        :class="['toggle-btn', { active: axesVisible }]"
-        title="切换世界坐标轴"
-        @click="toggleAxes"
-      >
-        ⊹ 坐标轴
+      <button :class="['toggle-btn', { active: axesVisible }]" title="切换世界坐标轴" @click="toggleAxes">
+        ⊹
       </button>
     </div>
 
     <!-- 显示辅助 -->
     <div class="group">
-      <button
-        :class="['toggle-btn', { active: gridVisible }]"
-        title="切换地平面网格"
-        @click="toggleGrid"
-      >
-        ⊞ 网格
+      <button :class="['toggle-btn', { active: gridVisible }]" title="切换地平面网格" @click="toggleGrid">
+        ⊞
       </button>
     </div>
 
@@ -57,8 +49,8 @@
 
     <div class="group">
       <button @click="showImportDialog = true" title="批量导入">📥 批量导入</button>
-      <button @click="save" class="save-btn">💾 保存</button>
-      <button @click="share" class="save-btn">🔗 分享</button>
+      <button @click="save" class="save-btn" title="保存(Ctrl+S)">💾 保存</button>
+      <button @click="share" class="save-btn">预览</button>
     </div>
 
     <ImportDialog v-model:visible="showImportDialog" />
@@ -66,39 +58,37 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue';
-import { useRoute } from 'vue-router';
+import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { useRoute } from 'vue-router'
 
-import ImportDialog from '@/features/toolbar/ImportDialog.vue';
-import { publishScene } from '@/services/api';
-import { useEditorCoreStore } from '@/stores/editorCore';
-import { useManagerStore } from '@/stores/manager';
-import { TransformControlsMode } from 'three/examples/jsm/controls/TransformControls.js';
-import { useHistoryStore } from '@/stores/history';
+import ImportDialog from '@/features/toolbar/ImportDialog.vue'
+import { publishScene } from '@/services/api'
+import { useEditorCoreStore } from '@/stores/editorCore'
+import { useManagerStore } from '@/stores/manager'
+import { TransformControlsMode } from 'three/examples/jsm/controls/TransformControls.js'
+import { useHistoryStore } from '@/stores/history'
 import { ElMessage } from 'element-plus'
 import 'element-plus/es/components/message/style/css'
 // ViewPreset 本地类型，与 @scene-prod/core ViewManager 保持一致
 type ViewPreset = 'perspective' | 'top' | 'bottom' | 'front' | 'back' | 'right' | 'left'
 
-const route = useRoute();
-const showImportDialog = ref(false);
-const editorCoreStore = useEditorCoreStore();
-const managerStore = useManagerStore();
-const historyStore = useHistoryStore();
+const route = useRoute()
+const showImportDialog = ref(false)
+const editorCoreStore = useEditorCoreStore()
+const managerStore = useManagerStore()
+const historyStore = useHistoryStore()
 
 const VIEW_OPTIONS: { value: ViewPreset; label: string }[] = [
   { value: 'perspective', label: '透视视图' },
-  { value: 'top',         label: '顶视图' },
-  { value: 'bottom',      label: '底视图' },
-  { value: 'front',       label: '前视图' },
-  { value: 'back',        label: '后视图' },
-  { value: 'right',       label: '右视图' },
-  { value: 'left',        label: '左视图' },
+  { value: 'top', label: '顶视图' },
+  { value: 'bottom', label: '底视图' },
+  { value: 'front', label: '前视图' },
+  { value: 'back', label: '后视图' },
+  { value: 'right', label: '右视图' },
+  { value: 'left', label: '左视图' },
 ]
 
-const currentView = computed<ViewPreset>(
-  () => managerStore.sceneManager?.getView() ?? 'perspective'
-)
+const currentView = computed<ViewPreset>(() => managerStore.sceneManager?.getView() ?? 'perspective')
 
 const onViewChange = (e: Event) => {
   const view = (e.target as HTMLSelectElement).value as ViewPreset
@@ -120,7 +110,7 @@ const toggleAxes = () => {
 }
 
 const setMode = (mode: TransformControlsMode) => {
-  managerStore.transformController?.setMode(mode);
+  managerStore.transformController?.setMode(mode)
 }
 
 const CAMERA_MODE: { value: 'orbit' | 'ghost'; label: string }[] = [
@@ -134,10 +124,10 @@ const onCameraChange = (e: Event) => {
 }
 
 const undo = () => {
-  historyStore.undo();
+  historyStore.undo()
 }
 const redo = () => {
-  historyStore.redo();
+  historyStore.redo()
 }
 const save = async () => {
   await managerStore.persistenceManager?.saveScene(editorCoreStore.sceneMetadata, {
@@ -153,7 +143,7 @@ const save = async () => {
         type: 'error',
       })
     },
-  });
+  })
 }
 
 // 发布并复制分享链接：发布前先保存，保证只读链接反映当前场景
@@ -180,16 +170,31 @@ const share = async () => {
 
   // 3. 复制只读链接到剪贴板
   const shareUrl = `${window.location.origin}/view/${sceneId}`
-  try {
-    await navigator.clipboard.writeText(shareUrl)
-    ElMessage({ message: `分享链接已复制：${shareUrl}`, type: 'success' })
-  } catch {
-    // 剪贴板不可用（如非 HTTPS 环境）时，至少把链接展示出来
-    ElMessage({ message: `分享链接：${shareUrl}`, type: 'success' })
+  window.open(shareUrl, '_blank')
+}
+
+const handleKeydown = (event: KeyboardEvent) => {
+  if (!event.ctrlKey && !event.shiftKey) {
+    if (event.key === 'm') {
+      event.preventDefault()
+      setMode('translate')
+    } else if (event.key === 'r') {
+      setMode('rotate')
+      event.preventDefault()
+    } else if (event.key === 's') {
+      setMode('scale')
+      event.preventDefault()
+    }
   }
 }
 
+onMounted(() => {
+  window.addEventListener('keydown', handleKeydown)
+})
 
+onUnmounted(() => {
+  window.removeEventListener('keydown', handleKeydown)
+})
 </script>
 
 <style scoped>
