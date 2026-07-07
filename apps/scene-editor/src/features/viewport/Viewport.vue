@@ -70,6 +70,8 @@ const onDrop = async (event: DragEvent) => {
       material.url = getModelUrl(material)
     }
     descriptor = { kind: 'obj', url, name, material }
+  } else if(type === 'fbx') {
+    descriptor = { kind: 'fbx', url, name }
   } else if (type === 'Box' || type === 'Sphere') {
     descriptor = { kind: 'primitive', primitive: type }
   }

@@ -4,6 +4,7 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
 import { DRACOLoader } from 'three/examples/jsm/loaders/DRACOLoader.js'
 import { OBJLoader } from 'three/examples/jsm/loaders/OBJLoader.js'
 import { MTLLoader } from 'three/examples/jsm/loaders/MTLLoader.js'
+import { FBXLoader } from 'three/examples/jsm/loaders/FBXLoader.js'
 import { SceneManager } from './SceneManager'
 import type { SerializedObject, SceneMetadata, Asset } from '@scene-prod/shared'
 import { IEditorAdapter, ISceneRepository } from './adapter'
@@ -16,6 +17,7 @@ import { createPrimitive, type PrimitiveType } from './utils/objectFactory'
 export type ObjectDescriptor =
   | { kind: 'gltf'; url: string; name?: string; normalizeScale?: number }
   | { kind: 'obj'; url: string; name?: string; material?: Asset | null }
+  | { kind: 'fbx'; url: string; name?: string; }
   | { kind: 'primitive'; primitive: PrimitiveType }
 
 /**
@@ -275,6 +277,41 @@ export class PersistenceManager {
   }
 
   /**
+   * 加载 FBX 模型。FBX 通常自带材质与骨骼动画，直接由 FBXLoader 解析为 Group。
+   * @param url 模型地址
+   * @param name 可选名称
+   * @returns 加载后的 Group
+   */
+  async loadFBXModel(url: string, name?: string): Promise<THREE.Group> {
+    if (!url.toLowerCase().endsWith('.fbx')) return Promise.reject('模型类型不支持')
+    return new Promise((resolve, reject) => {
+      new FBXLoader().load(
+        url,
+        (model) => {
+          model.userData.modelType = 'FBX'
+          model.userData.modelUrl = url
+          model.userData.isModelRoot = true  // 标记根节点
+          // 记录各网格材质的原始快照，供保存时按需只存"改动了的字段"
+          model.traverse((child) => {
+            if (child instanceof THREE.Mesh && child.material) {
+              const materials = Array.isArray(child.material) ? child.material : [child.material]
+              child.userData.materialBaseline = materials.map((m) => this.snapshotMaterial(m))
+            }
+          })
+          name && (model.name = name)
+          resolve(model)
+        },
+        undefined,
+        (error) => {
+          const errorMsg = `模型加载失败: ${url}`
+          console.error('❌', errorMsg, error)
+          reject(new Error(errorMsg))
+        },
+      )
+    })
+  }
+
+  /**
    * 根据描述符创建对象，统一 GLTF / OBJ / 基础几何体的创建入口
    * 只负责创建，不负责放置到场景中（放置由 SceneManager.placeObjectAt 与 AddObjectCommand 处理）
    * @param descriptor 对象描述符
@@ -292,6 +329,8 @@ export class PersistenceManager {
       }
       case 'obj':
         return this.loadModel(descriptor.url, descriptor.material ?? null)
+      case 'fbx':
+        return this.loadFBXModel(descriptor.url, descriptor.name)
       case 'primitive':
         return createPrimitive(descriptor.primitive)
     }
