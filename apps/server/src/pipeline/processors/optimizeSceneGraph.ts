@@ -12,6 +12,42 @@ const IDENTITY: number[] = [
 ]
 
 /**
+ * 收集「受保护」节点集合:骨骼关节、被动画(非 weights)引用的节点,及其后代。
+ * 这些节点不可烘焙 / 清零 / 逐顶点平移,否则会破坏蒙皮动画。
+ */
+function collectProtectedNodes(root: ReturnType<Document['getRoot']>): Set<GLTFNode> {
+  const joints = new Set<GLTFNode>()
+  for (const skin of root.listSkins()) {
+    for (const joint of skin.listJoints()) joints.add(joint)
+  }
+  const animated = new Set<GLTFNode>()
+  for (const anim of root.listAnimations()) {
+    for (const channel of anim.listChannels()) {
+      const target = channel.getTargetNode()
+      if (target && channel.getTargetPath() !== 'weights') animated.add(target)
+    }
+  }
+  // scene.traverse 是自顶向下(父先于子),因此「继承自父」的传播是正确的
+  const protectedSet = new Set<GLTFNode>()
+  for (const scene of root.listScenes()) {
+    scene.traverse((node) => {
+      const parent = node.getParentNode()
+      const inherited = parent !== null && protectedSet.has(parent)
+      if (joints.has(node) || animated.has(node) || inherited) protectedSet.add(node)
+    })
+  }
+  return protectedSet
+}
+
+/** 判断 4x4 矩阵是否为单位矩阵 */
+function isIdentity(m: number[]): boolean {
+  for (let i = 0; i < 16; i++) {
+    if (Math.abs(m[i] - IDENTITY[i]) > 1e-6) return false
+  }
+  return true
+}
+
+/**
  * 把每个网格节点的「世界变换」烘焙进顶点数据,再把节点清零并提到 scene 下。
  *
  * 为什么不用官方 flatten:
@@ -33,26 +69,7 @@ function bakeFlatten(document: Document) {
   const logger = document.getLogger()
 
   // 1) 受保护集合:骨骼关节、被动画(非 weights)引用的节点,及其后代
-  const joints = new Set<GLTFNode>()
-  for (const skin of root.listSkins()) {
-    for (const joint of skin.listJoints()) joints.add(joint)
-  }
-  const animated = new Set<GLTFNode>()
-  for (const anim of root.listAnimations()) {
-    for (const channel of anim.listChannels()) {
-      const target = channel.getTargetNode()
-      if (target && channel.getTargetPath() !== 'weights') animated.add(target)
-    }
-  }
-  // scene.traverse 是自顶向下(父先于子),因此「继承自父」的传播是正确的
-  const protectedSet = new Set<GLTFNode>()
-  for (const scene of root.listScenes()) {
-    scene.traverse((node) => {
-      const parent = node.getParentNode()
-      const inherited = parent !== null && protectedSet.has(parent)
-      if (joints.has(node) || animated.has(node) || inherited) protectedSet.add(node)
-    })
-  }
+  const protectedSet = collectProtectedNodes(root)
 
   // 2) 标记「子树中是否包含受保护节点」——这类节点不可烘焙/清零
   const hasProtectedInSubtree = new Set<GLTFNode>()
@@ -100,6 +117,86 @@ function bakeFlatten(document: Document) {
 }
 
 /**
+ * 把模型轴心(原点)对齐到「底面中心」:X/Z 居中,Y 底部贴地(min Y = 0)。
+ * 让编辑器里模型落在地面上、绕竖直中轴旋转,摆放手感自然。
+ *
+ * 需在 bakeFlatten 之后运行(此时静态网格已烘焙为 scene 下的单位矩阵节点):
+ *   - 已烘焙的静态网格:直接把偏移烘进顶点,保证 Step 6 重算的边界盒与几何一致;
+ *   - 受保护(骨骼/动画)子树:整体平移节点,避免破坏蒙皮。
+ */
+function recenterToBottomCenter(document: Document) {
+  const root = document.getRoot()
+  const logger = document.getLogger()
+
+  // 世界空间点变换(列主序 4x4,仿射,忽略透视)
+  const applyMat = (m: number[], x: number, y: number, z: number): [number, number, number] => [
+    m[0] * x + m[4] * y + m[8] * z + m[12],
+    m[1] * x + m[5] * y + m[9] * z + m[13],
+    m[2] * x + m[6] * y + m[10] * z + m[14],
+  ]
+
+  // 1) 求所有网格顶点的世界空间包围盒
+  let minX = Infinity,
+    minY = Infinity,
+    minZ = Infinity
+  let maxX = -Infinity,
+    maxY = -Infinity,
+    maxZ = -Infinity
+  for (const scene of root.listScenes()) {
+    scene.traverse((node) => {
+      const mesh = node.getMesh()
+      if (!mesh) return
+      const world = node.getWorldMatrix() as number[]
+      for (const prim of mesh.listPrimitives()) {
+        const pos = prim.getAttribute('POSITION')
+        if (!pos) continue
+        const arr = pos.getArray()
+        if (!arr) continue
+        for (let i = 0; i < arr.length; i += 3) {
+          const [wx, wy, wz] = applyMat(world, arr[i], arr[i + 1], arr[i + 2])
+          if (wx < minX) minX = wx
+          if (wx > maxX) maxX = wx
+          if (wy < minY) minY = wy
+          if (wy > maxY) maxY = wy
+          if (wz < minZ) minZ = wz
+          if (wz > maxZ) maxZ = wz
+        }
+      }
+    })
+  }
+  if (minX === Infinity) return // 空模型
+
+  // 2) 底面中心偏移:X/Z 取包围盒中心,Y 取底部
+  const ox = -(minX + maxX) / 2
+  const oy = -minY
+  const oz = -(minZ + maxZ) / 2
+  if (Math.abs(ox) < 1e-6 && Math.abs(oy) < 1e-6 && Math.abs(oz) < 1e-6) return // 已居中
+
+  // 平移矩阵(列主序):烘进顶点用
+  const T: number[] = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, ox, oy, oz, 1]
+  const protectedSet = collectProtectedNodes(root)
+
+  // 3) 逐个 scene 直接子节点施加偏移
+  for (const scene of root.listScenes()) {
+    for (const child of scene.listChildren()) {
+      const mesh = child.getMesh()
+      const isBakedStatic =
+        !!mesh && !protectedSet.has(child) && child.listChildren().length === 0 && isIdentity(child.getMatrix() as number[])
+      if (isBakedStatic) {
+        // 静态网格:偏移烘进顶点(bakeFlatten 已确保这些 mesh 不被共享)
+        transformMesh(mesh, T as any)
+      } else {
+        // 受保护 / 含子树 / 带变换的节点:整体平移,内部结构不变
+        const t = child.getTranslation() as [number, number, number]
+        child.setTranslation([t[0] + ox, t[1] + oy, t[2] + oz])
+      }
+    }
+  }
+
+  logger.debug(`[recenter] 底面中心归零,偏移 [${ox.toFixed(3)}, ${oy.toFixed(3)}, ${oz.toFixed(3)}]`)
+}
+
+/**
  * 优化场景图:压平冗余层级(几何烘焙,切变安全)、清理、去重。
  * 让可编辑的 mesh 直接挂在 scene 下,减少下钻层数,且保持各部件相对位置精确。
  */
@@ -110,6 +207,9 @@ async function optimizeSceneGraph(context: ProcessAssetType) {
 
     // 1) 几何烘焙式压平(替代官方 flatten,避免非均匀缩放导致的错位)
     bakeFlatten(document)
+
+    // 1.5) 重定心:把模型轴心对齐到底面中心(X/Z 居中,Y 贴地)
+    recenterToBottomCenter(document)
 
     // 2) 清理压平后残留的空节点 / 无用资源,再做去重
     //    dedup 放在压平之后:此时几何已带各自世界坐标,不会被错误合并;
