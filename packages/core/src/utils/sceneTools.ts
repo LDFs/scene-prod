@@ -59,35 +59,36 @@ export function findFreePosition(newMesh: THREE.Mesh, scene: THREE.Scene, startP
   const step = 0.5 // 每次搜索步长
   const maxRadius = 20
 
-  console.log('startPos: ', startPos);
+  // 现有障碍物在搜索过程中不会移动，包围盒只需预计算一次
+  const obstacles = scene.children
+    .filter((o): o is THREE.Mesh => o !== newMesh && o instanceof THREE.Mesh)
+    .map((o) => new THREE.Box3().setFromObject(o))
+  if (obstacles.length === 0) return startPos
+
+  // 搜索时新物体只做平移（旋转/缩放不变），基准包围盒算一次，之后按偏移平移复用
+  newMesh.position.copy(startPos)
+  newMesh.updateMatrixWorld(true)
+  const baseBox = new THREE.Box3().setFromObject(newMesh)
+
+  // 复用临时对象，避免每个候选点都 new，减轻 GC 压力
+  const box = new THREE.Box3()
+  const offset = new THREE.Vector3()
+
   // 同心圆逐圈扫描搜索
   for (let r = 0; r <= maxRadius; r += step) {
-    const angles =
-      r === 0
-        ? [0]
-        : Array.from(
-            { length: Math.ceil((2 * Math.PI * r) / step) },
-            (_, i) => (i / Math.ceil((2 * Math.PI * r) / step)) * 2 * Math.PI,
-          )
+    const count = r === 0 ? 1 : Math.ceil((2 * Math.PI * r) / step)
+    for (let i = 0; i < count; i++) {
+      const angle = (i / count) * 2 * Math.PI
+      offset.set(r * Math.cos(angle), 0, r * Math.sin(angle))
 
-    for (const angle of angles) {
-      const candidate = new THREE.Vector3(
-        startPos.x + r * Math.cos(angle),
-        startPos.y,
-        startPos.z + r * Math.sin(angle),
-      )
-      console.log('candidate: ', candidate);
+      box.copy(baseBox).translate(offset)
+      const hasCollision = obstacles.some((b) => box.intersectsBox(b))
 
-      newMesh.position.copy(candidate)
-      newMesh.updateMatrixWorld(true)
-
-      const box = new THREE.Box3().setFromObject(newMesh)
-      const hasCollision = scene.children.some((obj) => {
-        if (obj === newMesh || !(obj instanceof THREE.Mesh)) return false
-        return box.intersectsBox(new THREE.Box3().setFromObject(obj))
-      })
-
-      if (!hasCollision) return candidate
+      if (!hasCollision) {
+        const candidate = startPos.clone().add(offset)
+        newMesh.position.copy(candidate)
+        return candidate
+      }
     }
   }
 
