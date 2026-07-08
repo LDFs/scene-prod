@@ -408,15 +408,36 @@ export function fromAICommand(cmd: SceneCommand, sceneManager: SceneManager): Ac
 }
 
 export class BatchCommand implements ActualCommand {
+  // 记录本次真正 execute/redo 成功的指令,undo 只回滚这些
+  private executed: ActualCommand[] = []
+  private errors: { cmd: ActualCommand; error: unknown }[] = []
   constructor(private cmds: ActualCommand[], public label: string) {}
   execute() {
-    this.cmds.forEach((c) => c.execute())
+    this.executed = []
+    this.errors = []
+    for (const c of this.cmds) {
+      try {
+        c.execute()
+        this.executed.push(c)
+      } catch (error) {
+        this.errors.push({ cmd: c, error })
+        console.error(`[BatchCommand] 指令执行失败,已跳过:`, error)
+      }
+    }
   }
   undo() {
-    ;[...this.cmds].reverse().forEach((c) => c.undo())
+    ;[...this.executed].reverse().forEach((c) => c.undo())
   }
   redo() {
-    this.cmds.forEach((c) => c.redo())
+    this.executed = []
+    for (const c of this.cmds) {
+      try {
+        c.execute() // 或 c.redo(),取决于指令语义
+        this.executed.push(c)
+      } catch (error) {
+        console.error(`[BatchCommand] 重做失败,已跳过:`, error)
+      }
+    }
   }
 
   // 收集所有 AddObjectCommand 的调整信息
@@ -425,5 +446,9 @@ export class BatchCommand implements ActualCommand {
       .filter((c): c is AddObjectCommand => c instanceof AddObjectCommand)
       .map((c) => c.adjustmentNote)
       .filter(Boolean) as string[]
+  }
+
+  getErrors(): { cmd: ActualCommand; error: unknown }[] {
+    return this.errors
   }
 }

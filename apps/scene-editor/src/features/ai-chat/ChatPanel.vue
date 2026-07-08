@@ -170,7 +170,10 @@ async function send() {
         const notes = batch.getAdjustmentNotes()
         const explanation = notes.length > 0 ? `${parsed.explanation}\n\n⚠️ ${notes.join('\n')}` : parsed.explanation
 
-        messages.value.push({ role: 'assistant', content: explanation })
+        const batchErrors = batch.getErrors()
+        const errorText = batchErrors.length > 0 ? `\n${batchErrors}条操作执行失败`:''
+
+        messages.value.push({ role: 'assistant', content: explanation + errorText })
       } else messages.value.push({ role: 'assistant', content: parsed.explanation })
 
       if (failed.length > 0) {
