@@ -166,7 +166,7 @@ function recenterToBottomCenter(document: Document) {
   }
   if (minX === Infinity) return // 空模型
 
-  // 2) 底面中心偏移:X/Z 取包围盒中心,Y 取底部
+  // 2) 底面中心偏移:X/Z 取包围盒中心,Y 取底部；计算把底部中心移到原点(轴心)的偏移量 ox = 0 - 中心值，如果 ox 为0的话，就不用偏移了
   const ox = -(minX + maxX) / 2
   const oy = -minY
   const oz = -(minZ + maxZ) / 2
@@ -176,7 +176,7 @@ function recenterToBottomCenter(document: Document) {
   const T: number[] = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, ox, oy, oz, 1]
   const protectedSet = collectProtectedNodes(root)
 
-  // 3) 逐个 scene 直接子节点施加偏移
+  // 3) 逐个 scene 直接子节点施加偏移，移动几何体的顶点，不是移动轴心
   for (const scene of root.listScenes()) {
     for (const child of scene.listChildren()) {
       const mesh = child.getMesh()
@@ -184,6 +184,8 @@ function recenterToBottomCenter(document: Document) {
         !!mesh && !protectedSet.has(child) && child.listChildren().length === 0 && isIdentity(child.getMatrix() as number[])
       if (isBakedStatic) {
         // 静态网格:偏移烘进顶点(bakeFlatten 已确保这些 mesh 不被共享)
+        // 烘培：将改变的值直接写进几何数据中。这里的 T 是一个平移矩阵，作用于顶点坐标上，每个顶点: (x, y, z) → (x + ox, y + oy, z + oz)
+        // 不烘培：顶点数据不变，把偏移值记在节点上，渲染时应用
         transformMesh(mesh, T as any)
       } else {
         // 受保护 / 含子树 / 带变换的节点:整体平移,内部结构不变

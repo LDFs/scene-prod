@@ -21,6 +21,7 @@ export class QwenClient {
 
   /** 非流式对话补全 */
   async chat(messages: ChatMessage[], options: ChatCompletionOptions = {}): Promise<ChatCompletionResult> {
+    // create(): Creates a model response for the given chat conversation
     const completion = await this.raw.chat.completions.create(
       {
         model: options.model ?? this.config.model,
@@ -28,6 +29,7 @@ export class QwenClient {
         temperature: options.temperature ?? this.config.temperature,
         max_tokens: options.maxTokens ?? this.config.maxTokens,
         stream: false,
+        response_format: {type: 'json_object'},
       },
       { signal: options.signal },
     )

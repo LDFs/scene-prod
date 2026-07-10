@@ -49,6 +49,7 @@ import { SceneCommand, AssetWithId } from '@scene-prod/shared'
 import { fromAICommand, ActualCommand, BatchCommand, AddObjectCommand } from '@scene-prod/core'
 import { useHistoryStore } from '@/stores/history'
 import { getAssets, getModelUrl } from '@/services/asset'
+import { extractJson } from '@/utils/handleAi'
 
 const managerStore = useManagerStore()
 const historyStore = useHistoryStore()
@@ -138,7 +139,7 @@ async function send() {
 
   if (result.success) {
     try {
-      const parsed = AISceneResponseSchema.parse(JSON.parse(result.content))
+      const parsed = AISceneResponseSchema.parse(JSON.parse(extractJson(result.content)))
       console.log('[AI 指令]', parsed.commands)
       const failed: string[] = []
 
@@ -148,13 +149,13 @@ async function send() {
             const c = await resolveCommand(cmd)
             if (!c) {
               const label = cmd.commandType === 'add_model' ? cmd.modelName : cmd.name
-              failed.push(cmd.commandType + label)
+              failed.push(cmd.commandType + ':' + label)
             }
             return c
           } catch (error) {
             console.error('解析指令失败:', cmd, error)
             const label = cmd.commandType === 'add_model' ? cmd.modelName : cmd.name
-            failed.push(cmd.commandType + label)
+            failed.push(cmd.commandType + ':' + label)
             return null
           }
         }),
@@ -171,7 +172,10 @@ async function send() {
         const explanation = notes.length > 0 ? `${parsed.explanation}\n\n⚠️ ${notes.join('\n')}` : parsed.explanation
 
         const batchErrors = batch.getErrors()
-        const errorText = batchErrors.length > 0 ? `\n${batchErrors}条操作执行失败`:''
+        const errorText = batchErrors.length > 0 ? `\n${batchErrors}条操作执行失败` : ''
+        batchErrors.forEach((item) => {
+          failed.push(item.name)
+        })
 
         messages.value.push({ role: 'assistant', content: explanation + errorText })
       } else messages.value.push({ role: 'assistant', content: parsed.explanation })

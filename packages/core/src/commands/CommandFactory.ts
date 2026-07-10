@@ -3,6 +3,7 @@ import { ActualCommand, AddCommand, DeleteCommand, MaterialCommand, TransformCom
 import { SceneManager } from '../SceneManager'
 import { MaterialState, ObjectState, PropertyType, SceneCommand, SceneMetadata } from '@scene-prod/shared'
 import { findFreePosition } from '../utils/sceneTools'
+import { setObjectMaterial } from '../utils/objectFactory'
 
 /**
  * 添加对象指令
@@ -348,45 +349,25 @@ export function fromAICommand(cmd: SceneCommand, sceneManager: SceneManager): Ac
       return new TransformObjectCommand(object, oldState, newState)
     }
     case 'modify_material': {
-      const object = sceneManager.findObjectByName(cmd.name)
-      if (!object || !(object instanceof THREE.Mesh) || !object.material) return null
-      const oldMat = object.material as THREE.MeshStandardMaterial
-      const oldState: MaterialState = {
-        color: oldMat.color.clone(),
-        roughness: oldMat.roughness,
-        metalness: oldMat.metalness,
-        emissive: oldMat.emissive.clone(),
-        emissiveIntensity: oldMat.emissiveIntensity,
-        opacity: oldMat.opacity,
-        alphaTest: oldMat.alphaTest,
-        blending: oldMat.blending,
-        side: oldMat.side,
-        transparent: oldMat.transparent,
-        depthTest: oldMat.depthTest,
-        depthWrite: oldMat.depthWrite,
-        vertexColors: oldMat.vertexColors,
-        wireframe: oldMat.wireframe,
-        flatShading: oldMat.flatShading,
-      }
-      const newState: MaterialState = {
-        color: cmd.color ? new THREE.Color(cmd.color) : oldMat.color.clone(),
-        roughness: cmd.roughness ?? oldMat.roughness,
-        metalness: cmd.metalness ?? oldMat.metalness,
-        emissive: cmd.emissiveColor ? new THREE.Color(cmd.emissiveColor) : oldMat.emissive.clone(),
-        emissiveIntensity: cmd.emissiveIntensity ?? oldMat.emissiveIntensity,
-        opacity: cmd.opacity ?? oldMat.opacity,
-        transparent: cmd.transparent ?? oldMat.transparent,
-        wireframe: cmd.wireframe ?? oldMat.wireframe,
-        flatShading: cmd.flatShading ?? oldMat.flatShading,
-        // schema 未暴露这些字段（AI 常用子集之外），沿用原材质值
-        alphaTest: oldMat.alphaTest,
-        blending: oldMat.blending,
-        side: oldMat.side,
-        depthTest: oldMat.depthTest,
-        depthWrite: oldMat.depthWrite,
-        vertexColors: oldMat.vertexColors,
-      }
-      return new MaterialObjectCommand(object, oldState, newState)
+      const objects = sceneManager.findObjectByName(cmd.name)
+      if (!objects || objects.length === 0) return null
+      const object = objects[0]
+      const meshes: THREE.Mesh[] = []
+      if (object instanceof THREE.Group) {
+        object.traverse((child) => {
+          if (child instanceof THREE.Mesh && child.material) meshes.push(child)
+        })
+        if (meshes.length === 0) return null
+      } else if (object instanceof THREE.Mesh && object.material) {
+        meshes.push(object)
+      } else return null
+
+      const cmds = meshes.map((mesh) => {
+        const { oldState, newState } = setObjectMaterial(mesh, cmd)
+        return new MaterialObjectCommand(mesh, oldState, newState)
+      })
+      // 单网格直接返回，多网格用 BatchCommand 合并（撤销时整体回滚）
+      return cmds.length === 1 ? cmds[0] : new BatchCommand(cmds, `修改「${cmd.name}」材质`)
     }
     case 'modify_property': {
       const objects = sceneManager.findObjectByName(cmd.name)
@@ -410,7 +391,7 @@ export function fromAICommand(cmd: SceneCommand, sceneManager: SceneManager): Ac
 export class BatchCommand implements ActualCommand {
   // 记录本次真正 execute/redo 成功的指令,undo 只回滚这些
   private executed: ActualCommand[] = []
-  private errors: { cmd: ActualCommand; error: unknown }[] = []
+  private errors: { cmd: ActualCommand; error: unknown; name: string }[] = []
   constructor(private cmds: ActualCommand[], public label: string) {}
   execute() {
     this.executed = []
@@ -420,7 +401,7 @@ export class BatchCommand implements ActualCommand {
         c.execute()
         this.executed.push(c)
       } catch (error) {
-        this.errors.push({ cmd: c, error })
+        this.errors.push({ cmd: c, error, name: (c as any).constructor.name })
         console.error(`[BatchCommand] 指令执行失败,已跳过:`, error)
       }
     }
@@ -448,7 +429,7 @@ export class BatchCommand implements ActualCommand {
       .filter(Boolean) as string[]
   }
 
-  getErrors(): { cmd: ActualCommand; error: unknown }[] {
+  getErrors(): { cmd: ActualCommand; error: unknown; name: string }[] {
     return this.errors
   }
 }

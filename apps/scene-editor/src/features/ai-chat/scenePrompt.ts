@@ -4,16 +4,16 @@ type SceneObjectSummary = {
   name: string
   type: string
   position: string
-  rotation: string
-  scale: string
+  size: string
+  // 以下字段仅在非默认时才有值，减少 prompt 体积
+  rotation?: string
+  scale?: string
   color?: string
-  visible: boolean
-  bbox: {
-    min: string,
-    max: string,
-    size: string
-  }
+  hidden?: boolean
 }
+
+const fmt = (n: number) => parseFloat(n.toFixed(2)).toString()
+const fmtVec = (x: number, y: number, z: number) => `(${fmt(x)},${fmt(y)},${fmt(z)})`
 
 function summarizeObject(obj: THREE.Object3D): SceneObjectSummary {
   const p = obj.position
@@ -38,39 +38,39 @@ function summarizeObject(obj: THREE.Object3D): SceneObjectSummary {
     type = 'group'
   }
 
-  const fmt = (n: number) => parseFloat(n.toFixed(3)).toString()
-  const fmtVec = (x: number, y: number, z: number) => `(${fmt(x)}, ${fmt(y)}, ${fmt(z)})`
-
   const box = new THREE.Box3().setFromObject(obj)
   const size = new THREE.Vector3()
-  const center = new THREE.Vector3()
   box.getSize(size)
-  box.getCenter(center)
+
+  const isDefault = (x: number, y: number, z: number, d: number) => x === d && y === d && z === d
 
   return {
     name: obj.name || obj.uuid,
     type,
     position: fmtVec(p.x, p.y, p.z),
-    rotation: fmtVec(r.x, r.y, r.z),
-    scale: fmtVec(s.x, s.y, s.z),
+    size: fmtVec(size.x, size.y, size.z),
+    // 旋转/缩放为默认值时省略；缩放默认 1，旋转默认 0
+    rotation: isDefault(r.x, r.y, r.z, 0) ? undefined : fmtVec(r.x, r.y, r.z),
+    scale: isDefault(s.x, s.y, s.z, 1) ? undefined : fmtVec(s.x, s.y, s.z),
     color,
-    visible: obj.visible,
-    bbox: {
-      min: `(${fmt(box.min.x)}, ${fmt(box.min.y)}, ${fmt(box.min.z)})`,
-      max: `(${fmt(box.max.x)}, ${fmt(box.max.y)}, ${fmt(box.max.z)})`,
-      size: `(${fmt(size.x)}, ${fmt(size.y)}, ${fmt(size.z)})`,
-    }
+    hidden: obj.visible ? undefined : true,
   }
 }
 
 function renderObjectList(objects: THREE.Object3D[]): string {
   if (objects.length === 0) return '（场景为空）'
-  return objects.map((obj, i) => {
+  // 表头只出现一次，逐行紧凑输出；position/size 为世界坐标下的中心与包围盒尺寸
+  const header = '格式: 序号. "名称" | 类型 | 位置 | 尺寸 [| 旋转 | 缩放 | 颜色 | 隐藏]（旋转/缩放为默认值时省略）'
+  const lines = objects.map((obj, i) => {
     const s = summarizeObject(obj)
-    const colorPart = s.color ? `, 颜色: ${s.color}` : ''
-    const visiblePart = s.visible ? '' : ', 隐藏'
-    return `  ${i + 1}. 名称: "${s.name}", 类型: ${s.type}, 位置: ${s.position}, 旋转: ${s.rotation}, 缩放: ${s.scale}${colorPart}${visiblePart}, 范围: ${s.bbox}`
-  }).join('\n')
+    const parts = [`"${s.name}"`, s.type, s.position, s.size]
+    if (s.rotation) parts.push(`旋转${s.rotation}`)
+    if (s.scale) parts.push(`缩放${s.scale}`)
+    if (s.color) parts.push(s.color)
+    if (s.hidden) parts.push('隐藏')
+    return `  ${i + 1}. ${parts.join(' | ')}`
+  })
+  return `${header}\n${lines.join('\n')}`
 }
 
 type LibraryModelSummary = {
@@ -94,7 +94,7 @@ export function buildSceneSystemPrompt(
 ): string {
   return `你是一个三维场景编辑器的 AI 助手。用户用自然语言描述对场景的修改需求，你需要将其转化为具体的执行指令。
 
-【重要】你必须严格返回如下 JSON 格式，不要输出任何额外文字：
+【重要】你必须严格返回如下 JSON 格式的字符串，不要输出任何额外文字和字符：
 {"explanation":"用中文描述你做了什么","commands":[...]}
 
 【当前场景中的物体】
@@ -136,7 +136,7 @@ ${renderModelLibrary(libraryModels)}
 - create 仅用于创建 box/sphere 这类基础几何体
 - "右移一点"等相对位移，请在原坐标基础上加偏移量（一点 ≈ 1 单位）
 - 新建物体时，除非用户明确说明允许物体重叠，否则新物体的其包围盒不得与现有物体的包围盒重叠。如果用户给出的是具体的坐标且这个坐标会与其他物体重叠时，询问用户是否允许重叠。
-- 现有物体的包围盒范围已在列表中提供，请据此选择合适的位置。
-- explanation 只描述你创建/修改了什么（颜色、形状、位置数值等），不要对重叠、碰撞、空间关系做任何判断或承诺，系统会自动处理
+- 列表中每个物体给出了中心位置与包围盒尺寸，其包围盒范围为 位置 ± 尺寸/2，请据此选择合适的位置避免重叠。
+- explanation 只用一句字符串来描述你创建/修改了什么（颜色、形状、位置数值等），不要对重叠、碰撞、空间关系做任何判断或承诺，系统会自动处理
 - 如果用户意图不涉及场景操作，commands 返回空数组，explanation 正常回答`
 }
