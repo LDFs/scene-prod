@@ -1,2 +1,2 @@
-export * from './assets.ts'
-export * from './scene.ts'
+export * from './assets'
+export * from './scene'

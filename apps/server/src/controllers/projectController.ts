@@ -34,7 +34,7 @@ async function createScene(req: FastifyRequest, res: FastifyReply) {
 
 async function deleteScene(req: FastifyRequest, res: FastifyReply) {
   try {
-    const sceneId = req.query?.sceneId as string
+    const { sceneId } = req.query as { sceneId: string }
     await SceneModel.deleteOne({ sceneId })
     await SceneObjectModel.deleteMany({ sceneId })
     res.status(200).send({ success: true, message: '场景删除成功' })
@@ -79,7 +79,7 @@ async function saveScene(req: FastifyRequest, res: FastifyReply) {
 
 async function loadScene(req: FastifyRequest, res: FastifyReply) {
   try {
-    const sceneId = req.query?.sceneId as string
+    const { sceneId } = req.query as { sceneId: string }
     if(!sceneId) {
       return res.status(400).send({ success: false, message: '场景ID不能为空' })
     }

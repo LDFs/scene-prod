@@ -7,4 +7,4 @@ export type {
   ModifyMaterialCommand,
   ModifyPropertyCommand,
   AddModelCommand,
-} from '../schema.ts'
+} from '../schema'

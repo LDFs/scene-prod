@@ -1,3 +1,3 @@
-export * from './src/types/index.ts'
+export * from './src/types/index'
 export * from './src/schema'
 export * from './src/constants'
