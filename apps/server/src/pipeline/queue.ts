@@ -6,7 +6,7 @@ export const assetQueue = new Bull("asset-processing", {
   redis: {
     host: redisUrl.hostname,
     port: Number(redisUrl.port) || 6379,
-    password: process.env.PASSWORD || ''
+    password: redisUrl.password || undefined
   },
   defaultJobOptions: {
     attempts: 3,
