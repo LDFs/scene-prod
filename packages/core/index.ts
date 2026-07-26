@@ -1,4 +1,5 @@
 export * from './src/SceneManager'
+export * from './src/SelectionBoxHelper'
 export * from './src/ViewManager'
 export * from './src/NodeRegistry'
 export * from './src/CameraDirector'

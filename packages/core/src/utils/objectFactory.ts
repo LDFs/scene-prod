@@ -14,17 +14,18 @@ export function createPrimitive(type: PrimitiveType): THREE.Mesh | null {
   let geometry: THREE.BufferGeometry
   let material: THREE.Material
   if (type === 'Box') {
-    geometry = new THREE.BoxGeometry(1, 1, 1)
+    geometry = new THREE.BoxGeometry(0.5, 0.5, 0.5)
     material = new THREE.MeshStandardMaterial({ color: 0x00ff00 })
   } else if (type === 'Sphere') {
-    geometry = new THREE.SphereGeometry(1, 32, 32)
+    geometry = new THREE.SphereGeometry(0.2, 24, 24)
     material = new THREE.MeshStandardMaterial({ color: 0x0000ff })
   } else {
     return null
   }
   const mesh = new THREE.Mesh(geometry, material)
+  geometry.computeBoundingBox()
   mesh.userData.isModelRoot = true // 标记根节点
-  mesh.userData.groundOffset = 0.5 // 使几何体位于地面之上
+  mesh.userData.groundOffset = -geometry.boundingBox!.min.y // 使几何体位于地面之上
   return mesh
 }
 

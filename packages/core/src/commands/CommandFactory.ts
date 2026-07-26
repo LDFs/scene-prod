@@ -295,7 +295,7 @@ export function fromAICommand(cmd: SceneCommand, sceneManager: SceneManager): Ac
     case 'create': {
       let geometry: THREE.BufferGeometry = new THREE.BoxGeometry(cmd.width ?? 1, cmd.height ?? 1, cmd.depth ?? 1)
       if (cmd.objectType === 'sphere') {
-        geometry = new THREE.SphereGeometry(cmd.radius ?? 1, 24, 24)
+        geometry = new THREE.SphereGeometry(cmd.radius ?? 0.2, 24, 24)
       }
       const material = new THREE.MeshStandardMaterial({
         color: cmd.color,

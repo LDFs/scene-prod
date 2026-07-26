@@ -128,8 +128,11 @@ onMounted(async () => {
   editorCoreStore.$subscribe((_, state) => {
     if (state.selectedObject) {
       transformController?.attach(state.selectedObject)
+      // 选中对象加上虚线外框
+      sceneManager?.setSelectionBox(state.selectedObject)
     } else {
       transformController?.detach()
+      sceneManager?.setSelectionBox(null)
     }
   })
 

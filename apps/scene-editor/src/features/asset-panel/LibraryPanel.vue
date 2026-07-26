@@ -5,10 +5,10 @@
     <!-- 几何体部分 -->
     <div class="section">
       <h4>几何体</h4>
-      <div class="item" draggable="true" @dragstart="onDragStart($event, 'Box')">
+      <div class="item" draggable="true" @dragstart="onDragGeo($event, 'Box')">
         📦 立方体
       </div>
-      <div class="item" draggable="true" @dragstart="onDragStart($event, 'Sphere')">
+      <div class="item" draggable="true" @dragstart="onDragGeo($event, 'Sphere')">
         🔵 球体
       </div>
     </div>
@@ -146,6 +146,10 @@ const stopPolling = () => {
     pollTimer = null;
   }
 };
+
+const onDragGeo = (event: DragEvent, type: string) => {
+  event.dataTransfer?.setData('type', type);
+}
 
 const onDragStart = (event: DragEvent, model: AssetWithId) => {
   // 后台仍在处理的模型，阻止拖拽

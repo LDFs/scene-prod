@@ -11,6 +11,7 @@ import { RaycastManager } from './RaycastManager'
 import { StatsManager } from './StatsManager'
 import { TriangleStatsManager } from './TriangleStatsManager'
 import { ViewManager, type ViewPreset } from './ViewManager'
+import { SelectionBoxHelper, type SelectionBoxHelperOptions } from './SelectionBoxHelper'
 import { Easing, Group, Tween } from '@tweenjs/tween.js'
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js'
 
@@ -42,6 +43,7 @@ export class SceneManager {
   private triangleStatsManager: TriangleStatsManager
   private raycastManager: RaycastManager = new RaycastManager()
   viewManager!: ViewManager
+  private selectionBoxHelper!: SelectionBoxHelper
 
   private events: Record<string, Function[]> = {}
   private isReady: boolean = false
@@ -114,6 +116,9 @@ export class SceneManager {
     this.statsManager = new StatsManager(this.canvas.parentElement || document.body, 'top-right', false)
     this.triangleStatsManager = new TriangleStatsManager(this.renderer, this.scene)
 
+    // 选中对象的虚线外框
+    this.selectionBoxHelper = new SelectionBoxHelper(this.scene)
+
     this._onCanvasClick = this._onCanvasClickFn.bind(this)
     this.canvas.addEventListener('click', this._onCanvasClick)
     this.animate = this.animateFn.bind(this)
@@ -175,10 +180,13 @@ export class SceneManager {
 
     this.controlManager.update(deltaTime)
 
-    this.renderer.render(this.scene, this.viewManager.activeCamera)
     /**
      * 更新一系列的效果
      */
+    // 外框跟随选中对象的最新姿态（渲染前同步，避免延迟一帧）
+    this.selectionBoxHelper.update()
+
+    this.renderer.render(this.scene, this.viewManager.activeCamera)
 
     this.statsManager.end()
   }
@@ -360,6 +368,40 @@ export class SceneManager {
     this.triangleStatsManager.makeDirty()
   }
 
+  //  ======== 选中外框 selectionBoxHelper =======
+
+  /**
+   * 为选中对象显示虚线外框
+   * @param object 选中的对象，传 null 表示取消显示
+   */
+  setSelectionBox(object: THREE.Object3D | null) {
+    if (object) {
+      this.selectionBoxHelper.attach(object)
+    } else {
+      this.selectionBoxHelper.detach()
+    }
+  }
+
+  /**
+   * 重新计算外框尺寸
+   * 选中对象的几何体或子节点结构变化后调用（位移/旋转/缩放会自动跟随，无需调用）
+   */
+  refreshSelectionBox() {
+    this.selectionBoxHelper.refresh()
+  }
+
+  /**
+   * 调整外框样式（颜色、不透明度、外扩比例、虚线疏密）
+   * @param options 需要覆盖的样式项
+   */
+  setSelectionBoxStyle(options: SelectionBoxHelperOptions) {
+    this.selectionBoxHelper.setOptions(options)
+  }
+
+  getSelectionBoxTarget(): THREE.Object3D | null {
+    return this.selectionBoxHelper.getTarget()
+  }
+
   //  ======== 对象描边 outlineManager =======
 
   //  ====== 对象高亮 highManager =====
@@ -447,6 +489,8 @@ export class SceneManager {
   }
 
   removeObjectFromScene(object: THREE.Object3D) {
+    // 对象被移出场景后，外框不应继续跟随它
+    this.selectionBoxHelper.detachIfTargetInside(object)
     this.scene.remove(object)
     this.objects.delete(object)
     this.markTriangleStatsDirty()
@@ -477,6 +521,7 @@ export class SceneManager {
   }
 
   clearScene() {
+    this.selectionBoxHelper.detach()
     this.objects.forEach((object) => {
       this.scene.remove(object)
     })
@@ -778,6 +823,7 @@ export class SceneManager {
     this.canvas.removeEventListener('click', this._onCanvasClick)
 
     // 销毁子管理器
+    this.selectionBoxHelper.dispose()
     this.controlManager.dispose()
     this.viewManager.dispose()
     this.triangleStatsManager.dispose()
