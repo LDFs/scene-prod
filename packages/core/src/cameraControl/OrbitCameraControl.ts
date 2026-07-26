@@ -28,7 +28,7 @@ export class OrbitCameraControl extends BaseCameraControl {
   constructor(camera: THREE.PerspectiveCamera, domElement: HTMLCanvasElement) {
     super(camera, domElement)
     this.orbitControls = new OrbitControls(camera, domElement)
-    this.orbitControls.enableDamping = true
+    this.orbitControls.enableDamping = false
     this.orbitControls.enabled = false
     // 左键平移、中键缩放；右键旋转交由本类自定义处理
     this.orbitControls.mouseButtons = {

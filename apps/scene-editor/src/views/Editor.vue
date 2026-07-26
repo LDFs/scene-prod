@@ -200,7 +200,7 @@ onUnmounted(() => {
 }
 
 .right-panel {
-  width: 320px;
+  width: 350px;
   display: flex;
   flex-direction: row;
   /* 水平排列：左侧 Tabs，右侧内容 */

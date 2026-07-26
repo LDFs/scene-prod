@@ -235,7 +235,7 @@ const onAlphaTestInput = (event: Event) => {
 
 <style scoped>
 .material-panel {
-  width: 100%;
+  width: 280px;
   height: 100%;
   background: #222;
   color: white;

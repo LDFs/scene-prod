@@ -22,6 +22,26 @@
         <input type="checkbox" v-model="selectedObject.visible" @change="onVisibleChange">
       </div>
     </div>
+    
+    <!-- Size：包围盒实际尺寸，只读 -->
+    <div class="section">
+      <h4>尺寸 (Size)</h4>
+      <template v-if="objectSize">
+        <div class="prop-row">
+          <label>宽 X</label>
+          <span class="readonly-val">{{ formatLength(objectSize.x) }}</span><span class="unit">m</span>
+        </div>
+        <div class="prop-row">
+          <label>高 Y</label>
+          <span class="readonly-val">{{ formatLength(objectSize.y) }}</span><span class="unit">m</span>
+        </div>
+        <div class="prop-row">
+          <label>深 Z</label>
+          <span class="readonly-val">{{ formatLength(objectSize.z) }}</span><span class="unit">m</span>
+        </div>
+      </template>
+      <p v-else class="empty-hint">该对象不含几何体</p>
+    </div>
 
     <!-- Position -->
     <div class="section" :key="'pos-' + forceUpdateKey">
@@ -42,26 +62,6 @@
           @change="e => applyTransform('position', 'z', Number((e.target as HTMLInputElement).value))">
       </div>
     </div>
-
-    <!-- Geographic Coordinates -->
-    <!-- <div class="section" v-if="isGisEnabled" :key="'geo-' + forceUpdateKey">
-      <h4>地理坐标 (Lat/Lng/Height)</h4>
-      <div class="prop-row">
-        <label>经度</label>
-        <input type="number" step="0.000001" v-model.number="geoLng" @change="updatePositionFromGeo">
-        <span class="unit">°</span>
-      </div>
-      <div class="prop-row">
-        <label>纬度</label>
-        <input type="number" step="0.000001" v-model.number="geoLat" @change="updatePositionFromGeo">
-        <span class="unit">°</span>
-      </div>
-      <div class="prop-row">
-        <label>高度</label>
-        <input type="number" step="0.01" v-model.number="geoHeight" @change="updatePositionFromGeo">
-        <span class="unit">m</span>
-      </div>
-    </div> -->
 
     <!-- Rotation -->
     <div class="section" :key="'rot-' + forceUpdateKey">
@@ -117,8 +117,8 @@ import { useEditorCoreStore } from '@/stores/editorCore';
 import { useManagerStore } from '@/stores/manager';
 import { useHistoryStore } from '@/stores/history';
 import { storeToRefs } from 'pinia';
-import { ref, watch, onMounted, onBeforeUnmount } from 'vue';
-import { PropertiyBaseCommand, TransformObjectCommand } from '@scene-prod/core'
+import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue';
+import { PropertiyBaseCommand, TransformObjectCommand, getObjectSize } from '@scene-prod/core'
 import * as THREE from 'three';
 import { PropertyType } from '@scene-prod/shared';
 
@@ -130,6 +130,22 @@ const historyStore = useHistoryStore();
 const localName = ref('')
 // 强制更新 key（用于触发 Vue 重新读取 Three.js 对象属性）
 const forceUpdateKey = ref(0);
+// 面板内直接改缩放时不重挂 position/rotation/scale 区块（会打断正在编辑的输入框），
+// 单独用一个计数器只驱动尺寸的重算
+const sizeVersion = ref(0);
+
+/**
+ * 选中对象的实际尺寸（含缩放）
+ * Three.js 对象不是响应式的，靠 forceUpdateKey / sizeVersion 触发重算
+ */
+const objectSize = computed(() => {
+  void forceUpdateKey.value
+  void sizeVersion.value
+  if (!selectedObject.value) return null
+  return getObjectSize(selectedObject.value)
+})
+
+const formatLength = (value: number) => value.toFixed(3)
 
 watch(selectedObject, (newVal) => {
   if (newVal) {
@@ -247,6 +263,7 @@ const applyTransform = (type: 'position' | 'scale' | 'rotation', axis: 'x' | 'y'
   )
   historyStore.pushWithoutExecute(cmd)
   onTransformChange(type)
+  sizeVersion.value++
 }
 
 </script>
@@ -319,6 +336,23 @@ input[type="color"] {
   padding: 0;
   height: 24px;
   cursor: pointer;
+}
+
+.readonly-val {
+  flex: 1;
+  padding: 4px 8px;
+  font-size: 12px;
+  color: #ddd;
+  font-variant-numeric: tabular-nums;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.empty-hint {
+  margin: 0;
+  font-size: 12px;
+  color: #666;
 }
 
 .empty-msg {

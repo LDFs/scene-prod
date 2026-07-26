@@ -29,6 +29,48 @@ export function getXYZValueWithDefault(
 }
 
 /**
+ * 计算对象的实际尺寸（世界尺度下的长宽高）
+ *
+ * 取对象自身局部坐标系下的包围盒，再乘以世界缩放：
+ * 不直接用世界 AABB（Box3.setFromObject）是因为那个盒子随旋转变大，
+ * 45° 摆放的柜子会显示出比实际更宽的尺寸。这里的口径与选中外框 SelectionBoxHelper 一致。
+ *
+ * @param object 目标对象
+ * @param target 输出向量，省略时新建
+ * @returns 尺寸向量；对象不含任何几何体（空 Group、灯光、相机等）时返回 null
+ */
+export function getObjectSize(object: THREE.Object3D, target = new THREE.Vector3()): THREE.Vector3 | null {
+  object.updateWorldMatrix(true, true)
+
+  const inverseMatrix = new THREE.Matrix4().copy(object.matrixWorld).invert()
+  const localBox = new THREE.Box3()
+  const childBox = new THREE.Box3()
+  const childMatrix = new THREE.Matrix4()
+
+  object.traverse((child) => {
+    const geometry = (child as THREE.Mesh).geometry as THREE.BufferGeometry | undefined
+    if (!geometry || typeof geometry.computeBoundingBox !== 'function') return
+    if (!geometry.boundingBox) geometry.computeBoundingBox()
+    if (!geometry.boundingBox) return
+
+    // 子节点几何体 -> 世界 -> 目标局部
+    childMatrix.multiplyMatrices(inverseMatrix, child.matrixWorld)
+    childBox.copy(geometry.boundingBox).applyMatrix4(childMatrix)
+    localBox.union(childBox)
+  })
+
+  if (localBox.isEmpty()) return null
+
+  // 局部包围盒不含对象自身及祖先的缩放，乘上世界缩放才是画面里的真实尺寸
+  const worldScale = new THREE.Vector3()
+  object.matrixWorld.decompose(new THREE.Vector3(), new THREE.Quaternion(), worldScale)
+
+  localBox.getSize(target).multiply(worldScale)
+  // 缩放为负值（镜像）时尺寸仍应为正
+  return target.set(Math.abs(target.x), Math.abs(target.y), Math.abs(target.z))
+}
+
+/**
  * 检测物体与场景中的物体是否有重叠
  * @param sceneManager 场景管理器
  * @param object 物体

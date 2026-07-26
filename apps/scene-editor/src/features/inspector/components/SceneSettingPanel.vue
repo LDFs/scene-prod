@@ -226,12 +226,13 @@ onBeforeUnmount(() => {
 
 <style scoped>
 .scene-settings-panel {
-  width: 100%;
-  height: 100%;
+  width: 280px;
+  /* height: 100%; */
   background: #222;
   color: white;
   padding: 15px;
   overflow-y: auto;
+  border-left: 1px solid #333;
 }
 
 h3 {
@@ -278,7 +279,6 @@ textarea {
   padding: 6px 8px;
   border-radius: 3px;
   font-size: 12px;
-  width: 100%;
 }
 
 textarea {

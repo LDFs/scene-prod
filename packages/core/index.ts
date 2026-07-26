@@ -12,4 +12,5 @@ export * from './src/commands'
 
 export * from './src/utils/ThumbnailGenerator'
 export * from './src/utils/objectFactory'
+export * from './src/utils/sceneTools'
 export * from './src/adapter'
