@@ -1,9 +1,9 @@
 import { createRouter, createWebHistory } from 'vue-router'
 
-import Editor from '../views/Editor.vue'
-import Scenes from '../views/Scenes.vue'
-import Assets from '../views/Assets.vue'
-import Preview from '../views/Preview.vue'
+const Editor = () => import('../views/Editor.vue')
+const Scenes = () => import('../views/Scenes.vue')
+const Assets = () => import('../views/Assets.vue')
+const Preview = () => import('../views/Preview.vue')
 
 const router = createRouter({
   history: createWebHistory(),

@@ -1,7 +1,7 @@
 // TODO: 封装与 scene-prod-server 的 HTTP 调用
 import { API_BASE_URL } from '../../config.js'
 import type { SceneData } from '@scene-prod/shared';
-import type { Pagination } from '../types/scenes';
+import type { Pagination } from '../types/scenes.js';
 
 
 export async function getScenes(page = 1, pageSize = 10) {

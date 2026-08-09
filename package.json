@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "description": "",
   "scripts": {
-    "scene:editor": "pnpm --filter @scene-prod/editor dev",
+    "scene:web": "pnpm --filter @scene-prod/web dev",
     "scene:server": "pnpm --filter @scene-prod/server dev",
     "scene:build": "pnpm --filter \"@scene-prod/*\" build && pnpm --filter \"scene-prod-*\" build"
   },

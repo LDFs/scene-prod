@@ -15,6 +15,6 @@ RUN pnpm --filter "@scene-prod/editor" build
 
 # ---- runner：Nginx 托管静态产物 + 反向代理 ----
 FROM nginx:1.27-alpine AS runner
-COPY apps/scene-editor/nginx.conf /etc/nginx/conf.d/default.conf
-COPY --from=build /app/apps/scene-editor/dist /usr/share/nginx/html
+COPY apps/web/nginx.conf /etc/nginx/conf.d/default.conf
+COPY --from=build /app/apps/web/dist /usr/share/nginx/html
 EXPOSE 80 443

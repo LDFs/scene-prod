@@ -1,6 +1,6 @@
 {
-  "name": "@scene-prod/editor",
-  "description": "scene-prod 3D scene editor (Vue 3 + Vite + Three.js)",
+  "name": "@scene-prod/web",
+  "description": "scene-prod 3D scene web (Vue 3 + Vite + Three.js)",
   "private": true,
   "version": "0.0.1",
   "type": "module",

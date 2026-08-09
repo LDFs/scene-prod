@@ -55,7 +55,7 @@ services:
   web:
     build:
       context: . # 同 server：上下文是仓库根目录
-      dockerfile: apps/scene-editor/Dockerfile
+      dockerfile: apps/web/Dockerfile
       args:
         # 同域部署走相对路径，留空即可
         VITE_API_BASE_URL: ${VITE_API_BASE_URL:-}
