@@ -5,12 +5,15 @@ const Scenes = () => import('../views/Scenes.vue')
 const Assets = () => import('../views/Assets.vue')
 const Preview = () => import('../views/Preview.vue')
 
+const Show3D = () => import('../views/showme/index.vue')
+const Home = () => import('../views/home/index.vue')
+
 const router = createRouter({
   history: createWebHistory(),
   routes: [
     {
       path: '/',
-      redirect: '/scenes'
+      component: Home
     },
     {
       path: '/scenes',
@@ -27,6 +30,10 @@ const router = createRouter({
     {
       path: '/assets',
       component: Assets
+    },
+    {
+      path: '/Show3D',
+      component: Show3D
     }
   ]
 })
