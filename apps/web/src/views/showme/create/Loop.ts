@@ -27,8 +27,11 @@ class Loop {
   }
 
   tick() {
+    // Timer 的 getDelta() 只是读取缓存值，必须先 update() 才会重新计算
+    timer.update()
+    const delta = timer.getDelta()
+
     this.updatables.forEach((item) => {
-      const delta = timer.getDelta()
       item.tick(delta)
     })
   }

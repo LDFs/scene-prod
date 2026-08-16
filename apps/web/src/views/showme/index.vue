@@ -5,13 +5,13 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
 
-import { createScene } from './create'
+import { createScene, createSceneForPBR } from './create'
 
 const canvasRef = ref<HTMLElement | null>(null)
 
 onMounted(() => {
   if (canvasRef.value) {
-    createScene(canvasRef.value)
+    createSceneForPBR(canvasRef.value)
   }
 })
 </script>
@@ -19,6 +19,6 @@ onMounted(() => {
 <style scoped lang="scss">
 #container {
   width: 100vw;
-  height: 800px;
+  height: 100vh;
 }
 </style>
