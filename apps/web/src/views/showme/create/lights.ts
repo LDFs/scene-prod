@@ -1,4 +1,4 @@
-import { HemisphereLight, PointLight, SpotLight, Color, CameraHelper } from "three";
+import { HemisphereLight, AmbientLight, PointLight, SpotLight, Color, CameraHelper } from "three";
 import { pane } from '../utils/createPane'
 
 function createLights() {
@@ -75,6 +75,19 @@ function createLights() {
   ]
 }
 
+function createPlanetLights() {
+  const pointLight = new PointLight('#fa621c', 40, 0, 1)
+  pointLight.position.set(0,0,0)
+
+  const ambientLight = new AmbientLight('#fff', 1)
+
+  return [
+    pointLight,
+    ambientLight
+  ]
+}
+
 export {
-  createLights
+  createLights,
+  createPlanetLights
 }

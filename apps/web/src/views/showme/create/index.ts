@@ -1,7 +1,7 @@
-import { Scene, WebGLRenderer, Color, AxesHelper, PCFShadowMap } from 'three'
+import { Scene, WebGLRenderer, Color, AxesHelper, PCFShadowMap, CubeTextureLoader } from 'three'
 
-import { createMeshes, creatMeshesForPBR } from './meshes'
-import { createLights } from './lights'
+import { createMeshes, creatMeshesForPBR, createPlante } from './meshes'
+import { createLights, createPlanetLights } from './lights'
 import { createControls } from './controls'
 import { createCamera } from './camera'
 import Loop from './Loop'
@@ -30,7 +30,7 @@ function createScene(container: HTMLElement) {
   renderer.setSize(width, height)
   /** 设置最大的屏幕像素比，防止在移动端上设置过大的无意义的高像素 */
   const maxPixelRatio = Math.min(window.devicePixelRatio, 2)
-  renderer.setPixelRatio(maxPixelRatio)     // 设置渲染像素比，可以一定程度上降低锯齿
+  renderer.setPixelRatio(maxPixelRatio) // 设置渲染像素比，可以一定程度上降低锯齿
   container.append(renderer.domElement)
 
   const loop = new Loop(camera, scene, renderer)
@@ -51,7 +51,7 @@ function createScene(container: HTMLElement) {
 }
 
 function createSceneForPBR(container: HTMLElement) {
-    const scene = new Scene()
+  const scene = new Scene()
   // scene.background = new Color('skyblue')
 
   const { clientWidth: width, clientHeight: height } = container
@@ -60,7 +60,7 @@ function createSceneForPBR(container: HTMLElement) {
 
   const { ball, plane } = creatMeshesForPBR()
   const lights = createLights()
-  lights.forEach((light) =>{
+  lights.forEach((light) => {
     scene.add(light)
   })
 
@@ -87,7 +87,58 @@ function createSceneForPBR(container: HTMLElement) {
   // renderer.render(scene, camera)
 
   loop.start()
-
 }
 
-export { createScene, createSceneForPBR }
+const base = (p: string) => new URL(`../assets/imgs/cubeMap/${p}`, import.meta.url).href
+function createPlanteScene(container: HTMLElement) {
+  const scene = new Scene()
+  // scene.background = new Color('skyblue')
+  const textureLoader = new CubeTextureLoader()
+  const cubeTexture = textureLoader.load([
+    base('px.png'),
+    base('nx.png'),
+    base('py.png'),
+    base('ny.png'),
+    base('pz.png'),
+    base('nz.png'),
+  ])
+  scene.background = cubeTexture
+
+  const { clientWidth: width, clientHeight: height } = container
+
+  const camera = createCamera(width, height)
+
+  const { orbitControls } = createControls(camera, container)
+
+  const renderer = new WebGLRenderer({
+    antialias: true,
+  })
+  renderer.setSize(width, height)
+  renderer.shadowMap.enabled = true
+  renderer.shadowMap.type = PCFShadowMap
+
+  container.append(renderer.domElement)
+
+  const loop = new Loop(camera, scene, renderer)
+  loop.updatables.push(orbitControls)
+  // loop.updatables.push(earth)
+
+  const planets = createPlante()
+  planets.forEach((planet) => {
+    scene.add(planet)
+    loop.updatables.push(planet)
+  })
+
+  const lights = createPlanetLights()
+  lights.forEach((light) => {
+    scene.add(light)
+  })
+
+  const resizer = new Resizer(camera, renderer, container)
+
+  // renderer.render(scene, camera)
+
+  loop.start()
+}
+
+export { createScene, createSceneForPBR, createPlanteScene }

@@ -1,4 +1,4 @@
-import { MeshStandardMaterial, TextureLoader } from 'three'
+import { MeshStandardMaterial, TextureLoader, MeshBasicMaterial } from 'three'
 import { pane } from '../utils/createPane'
 
 function createMaterials() {
@@ -81,4 +81,24 @@ function createPBRMate() {
   }
 }
 
-export { createMaterials, createPBRMate }
+function createPlanteMate() {
+  const sun = new MeshBasicMaterial({
+    color: '#ff5d13'
+  })
+
+  const earth = new MeshBasicMaterial({
+    color: '#0300cf'
+  })
+
+  const moon = new MeshBasicMaterial({
+    color: '#3d3d3d'
+  })
+
+  return {
+    sun,
+    earth,
+    moon
+  }
+}
+
+export { createMaterials, createPBRMate, createPlanteMate }

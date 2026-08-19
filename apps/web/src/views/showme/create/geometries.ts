@@ -10,4 +10,15 @@ function createGeometry() {
   return { box, ball, plane }
 }
 
-export { createGeometry }
+function createPlanteGeo() {
+  const sun = new SphereGeometry(1, 32, 32)
+
+  const earth = new SphereGeometry(1, 32, 32)
+
+  return {
+    sun,
+    earth
+  }
+}
+
+export { createGeometry, createPlanteGeo }
