@@ -87,7 +87,20 @@ function createPlanetLights() {
   ]
 }
 
+function createBaseLights() {
+  const pointLight = new PointLight('#fa621c', 40, 0, 1)
+  pointLight.position.set(30,30,30)
+
+  const ambientLight = new AmbientLight('#fff', 1)
+
+  return [
+    pointLight,
+    ambientLight
+  ]
+}
+
 export {
   createLights,
-  createPlanetLights
+  createPlanetLights,
+  createBaseLights
 }

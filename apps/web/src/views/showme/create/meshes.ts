@@ -6,7 +6,10 @@ import {
   MeshStandardMaterial,
   MeshBasicMaterial,
   TextureLoader,
+  Scene,
 } from 'three'
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
 
 import { createGeometry, createPlanteGeo } from './geometries'
 import { createMaterials, createPBRMate, createPlanteMate } from './materials'
@@ -198,4 +201,23 @@ function createPlante() {
   return planets
 }
 
-export { createMeshes, creatMeshesForPBR, createPlante }
+const base1 = (p: string) => new URL(`../assets/models/${p}`, import.meta.url).href
+
+async function loaderModels(scene: Scene) {
+  const loader = new GLTFLoader()
+  const dracoLoader = new DRACOLoader()
+  dracoLoader.setDecoderPath('/draco/')
+  loader.setDRACOLoader(dracoLoader)
+  // loader.load(base1('DamagedHelmet.glb'), (data) => {
+  //   scene.add(data.scene)
+  //   data.scene.scale.setScalar(10)
+  //   console.log("data:", data)
+  // })
+
+  const model = await loader.loadAsync(base1('DamagedHelmet.glb'))
+  model.scene.scale.setScalar(14)
+  console.log(model.scene)
+  return model.scene
+}
+
+export { createMeshes, creatMeshesForPBR, createPlante, loaderModels }

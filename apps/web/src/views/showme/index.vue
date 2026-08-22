@@ -5,13 +5,13 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
 
-import { createScene, createSceneForPBR, createPlanteScene } from './create'
+import { createScene, createSceneForPBR, createPlanteScene, createGLTFScene } from './create'
 
 const canvasRef = ref<HTMLElement | null>(null)
 
 onMounted(() => {
   if (canvasRef.value) {
-    createPlanteScene(canvasRef.value)
+    createGLTFScene(canvasRef.value)
   }
 })
 </script>

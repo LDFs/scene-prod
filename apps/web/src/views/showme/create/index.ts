@@ -1,7 +1,7 @@
 import { Scene, WebGLRenderer, Color, AxesHelper, PCFShadowMap, CubeTextureLoader } from 'three'
 
-import { createMeshes, creatMeshesForPBR, createPlante } from './meshes'
-import { createLights, createPlanetLights } from './lights'
+import { createMeshes, creatMeshesForPBR, createPlante, loaderModels } from './meshes'
+import { createLights, createPlanetLights, createBaseLights } from './lights'
 import { createControls } from './controls'
 import { createCamera } from './camera'
 import Loop from './Loop'
@@ -89,6 +89,9 @@ function createSceneForPBR(container: HTMLElement) {
   loop.start()
 }
 
+/**
+ * glob 里的 ${} 不能跨 / ，只能一级一级表示，每级把${}替换为 * ，运行再用拼好的字符串去查表
+ */
 const base = (p: string) => new URL(`../assets/imgs/cubeMap/${p}`, import.meta.url).href
 function createPlanteScene(container: HTMLElement) {
   const scene = new Scene()
@@ -141,4 +144,58 @@ function createPlanteScene(container: HTMLElement) {
   loop.start()
 }
 
-export { createScene, createSceneForPBR, createPlanteScene }
+const modelBase = (p: string) => new URL(`../assets/imgs/pisa/${p}`, import.meta.url).href
+async function createGLTFScene(container: HTMLElement) {
+  const scene = new Scene()
+  // scene.background = new Color('skyblue')
+
+  const { clientWidth: width, clientHeight: height } = container
+
+  const camera = createCamera(width, height)
+
+  const model = await loaderModels(scene)
+  scene.add(model)
+
+
+  const lights = createBaseLights()
+  lights.forEach((light) => {
+    scene.add(light)
+  })
+
+  const texLoader = new CubeTextureLoader()
+  texLoader.load(
+    [
+      modelBase('px.png'),
+      modelBase('nx.png'),
+      modelBase('py.png'),
+      modelBase('ny.png'),
+      modelBase('pz.png'),
+      modelBase('nz.png'),
+    ],
+    (data) => {
+      scene.background = data
+    },
+  )
+
+  const { orbitControls } = createControls(camera, container)
+
+  const renderer = new WebGLRenderer({
+    antialias: true,
+  })
+  renderer.setSize(width, height)
+  renderer.shadowMap.enabled = true
+  renderer.shadowMap.type = PCFShadowMap
+
+  container.append(renderer.domElement)
+
+  const loop = new Loop(camera, scene, renderer)
+  loop.updatables.push(orbitControls)
+
+  new Resizer(camera, renderer, container)
+
+  // renderer.render(scene, camera)
+
+  loop.start()
+}
+
+export { createScene, createSceneForPBR, createPlanteScene, createGLTFScene }
