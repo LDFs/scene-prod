@@ -42,15 +42,29 @@ const entries = [
     path: '/scenes',
   },
   {
+    icon: '🏝️',
+    name: '资产管理',
+    desc: '导入场景中使用的各种资产',
+    action: '进入管理器',
+    path: '/assets',
+  },
+  {
+    icon: '🧊',
+    name: '基础练习',
+    desc: '几何体、材质与灯光的基本使用，快速查看渲染效果。',
+    action: '开始预览',
+    path: '/practice3d',
+  },
+  {
     icon: '🧊',
     name: '三维展示',
     desc: '几何体、材质与灯光的实时演示，快速查看渲染效果。',
     action: '开始预览',
-    path: '/Show3D',
+    path: '/moduleScene',
   },
 ];
 </script>
 
 <style scoped lang="scss">
-@import '../styles/home.scss';
+@use '../styles/home.scss';
 </style>

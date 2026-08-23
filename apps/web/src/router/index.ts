@@ -5,8 +5,9 @@ const Scenes = () => import('../views/Scenes.vue')
 const Assets = () => import('../views/Assets.vue')
 const Preview = () => import('../views/Preview.vue')
 
-const Show3D = () => import('../views/showme/index.vue')
+const practice3d = () => import('../views/showme/index.vue')
 const Home = () => import('../views/home/index.vue')
+const moduleScene = () => import("../views/moduleScene/index.vue")
 
 const router = createRouter({
   history: createWebHistory(),
@@ -32,8 +33,12 @@ const router = createRouter({
       component: Assets
     },
     {
-      path: '/Show3D',
-      component: Show3D
+      path: '/practice3d',
+      component: practice3d
+    },
+    {
+      path: '/moduleScene',
+      component: moduleScene
     }
   ]
 })
