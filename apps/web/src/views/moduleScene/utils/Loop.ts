@@ -1,18 +1,19 @@
-import { Timer } from 'three'
-import WorldScene from './scene'
-import Camera from './camera'
-import Renderer from './renderer'
-import App from './App'
+import { Timer, Scene } from 'three'
+import Camera from '../world/camera'
+import Renderer from '../world/renderer'
+import Environment from '../world/Environment'
 
 export default class Loop {
   scene
   camera
   timer
   rendererIns
-  constructor(scene: WorldScene, camera: Camera, renderer: Renderer) {
+  environment
+  constructor(scene: Scene, camera: Camera, renderer: Renderer) {
     this.camera = camera
     this.scene = scene
     this.timer = new Timer()
+    this.environment = new Environment()
 
     this.rendererIns = renderer
   }
@@ -21,9 +22,9 @@ export default class Loop {
     this.rendererIns.renderer.setAnimationLoop(() => {
       const delta = this.timer.getDelta()
       this.timer.update()
-      this.rendererIns.renderer.render(this.scene.scene, this.camera.camera)
+      this.rendererIns.renderer.render(this.scene, this.camera.camera)
       this.camera?.loop(delta)
-      App.current.substance.loop(delta)
+      this.environment.loop(delta)
     })
   }
 

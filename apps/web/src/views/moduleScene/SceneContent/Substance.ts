@@ -5,7 +5,7 @@ export default class Substance {
   constructor() {
     this.cube = new Mesh(
       new BoxGeometry(1, 1, 1),
-      new MeshBasicMaterial({
+      new MeshStandardMaterial({
         color: '#a30',
       }),
     )

@@ -12,13 +12,18 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
 import App from './world/App'
+import Environment from './world/Environment'
+import Loop from './utils/Loop'
 
 const canvasRef = ref<HTMLElement | null>(null)
 
 onMounted(() => {
   if (canvasRef.value) {
-    App.create(canvasRef.value).loop.start()
+    const app = App.create(canvasRef.value)
     App.loadTexture()
+    new Environment().makeUpScene()
+    const loop = new Loop(app.scene.scene, app.camera, app.renderer)
+    loop.start()
   }
 })
 </script>
