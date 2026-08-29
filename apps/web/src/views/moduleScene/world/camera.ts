@@ -16,7 +16,7 @@ export default class Camera {
     const width = canvas?.clientWidth ?? window.innerWidth
     const height = canvas?.clientHeight ?? window.innerHeight
     this.camera = new PerspectiveCamera(50, width / height, 0.1, 1000)
-    const { x, y, z } = options?.initPosition ?? { x: 10, y: 10, z: 10 }
+    const { x, y, z } = options?.initPosition ?? { x: 100, y: 80, z: 3 }
     this.camera.position.set(x, y, z)
 
     this.orbitControls = new OrbitControls(this.camera, this.canvas) as OrbitControls

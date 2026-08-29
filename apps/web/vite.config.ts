@@ -5,6 +5,8 @@ import path from 'path'
 import AutoImport from 'unplugin-auto-import/vite'
 import Components from 'unplugin-vue-components/vite'
 import { ElementPlusResolver } from 'unplugin-vue-components/resolvers'
+import wasm from 'vite-plugin-wasm'
+import topLevelAwait from 'vite-plugin-top-level-await'
 
 export default defineConfig(() => {
   const __dirname = path.resolve()
@@ -16,6 +18,8 @@ export default defineConfig(() => {
       Components({
         resolvers: [ElementPlusResolver()],
       }),
+      wasm(),
+      topLevelAwait()
     ],
     resolve: {
       alias: {

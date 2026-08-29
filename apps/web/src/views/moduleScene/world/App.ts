@@ -15,7 +15,7 @@ export default class App {
   readonly renderer: Renderer
 
   readonly assetLoader: AssetLoader
-  readonly preloader: Preloader
+  readonly preloader: Preloader | null = null
   private constructor(readonly canvas: HTMLElement) {
     this.scene = new WorldScene()
     this.camera = new Camera(canvas)
@@ -23,7 +23,7 @@ export default class App {
 
     this.assetLoader = new AssetLoader()
 
-    this.preloader = new Preloader()
+    // this.preloader = new Preloader()
 
     new Resizer(this.camera.camera, this.renderer.renderer, canvas)
   }

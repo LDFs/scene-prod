@@ -1,12 +1,12 @@
 <template>
   <div id="threejs-container" ref="canvasRef"></div>
-  <div id="preload-overlay">
+  <!-- <div id="preload-overlay">
     <div id="loading">
       <span>LOADING ASSETS...</span>
       <span id="loading-percent"></span>
     </div>
     <button id="start-btn">START</button>
-  </div>
+  </div> -->
 </template>
 
 <script setup lang="ts">
@@ -21,8 +21,9 @@ onMounted(() => {
   if (canvasRef.value) {
     const app = App.create(canvasRef.value)
     App.loadTexture()
-    new Environment().makeUpScene()
-    const loop = new Loop(app.scene.scene, app.camera, app.renderer)
+    const environment = new Environment()
+    environment.makeUpScene()
+    const loop = new Loop(app.scene.scene, app.camera, app.renderer, environment)
     loop.start()
   }
 })

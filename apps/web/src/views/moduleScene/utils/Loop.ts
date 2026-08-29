@@ -9,11 +9,11 @@ export default class Loop {
   timer
   rendererIns
   environment
-  constructor(scene: Scene, camera: Camera, renderer: Renderer) {
+  constructor(scene: Scene, camera: Camera, renderer: Renderer, environment: Environment) {
     this.camera = camera
     this.scene = scene
     this.timer = new Timer()
-    this.environment = new Environment()
+    this.environment = environment
 
     this.rendererIns = renderer
   }
