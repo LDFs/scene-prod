@@ -62,6 +62,13 @@ const entries = [
     action: '开始预览',
     path: '/moduleScene',
   },
+  {
+    icon: '🧊',
+    name: '模型陈列',
+    desc: '对加载的模型做处理',
+    action: '开始预览',
+    path: '/modelDisplay',
+  },
 ];
 </script>
 

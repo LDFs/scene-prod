@@ -8,6 +8,7 @@ const Preview = () => import('../views/Preview.vue')
 const practice3d = () => import('../views/showme/index.vue')
 const Home = () => import('../views/home/index.vue')
 const moduleScene = () => import("../views/moduleScene/index.vue")
+const modelDisplay = () => import("../views/modelDisplay/index.vue")
 
 const router = createRouter({
   history: createWebHistory(),
@@ -39,6 +40,9 @@ const router = createRouter({
     {
       path: '/moduleScene',
       component: moduleScene
+    },{
+      path: '/modelDisplay',
+      component: modelDisplay
     }
   ]
 })
