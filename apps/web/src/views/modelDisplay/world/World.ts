@@ -94,8 +94,9 @@ export default class World {
   changeSelectObject() {
     const sceneStore = useSceneStore()
     sceneStore.$subscribe((_, state) => {
-      if(state.selectedObject) {
-        console.log("选中了", state.selectedObject)
+      console.log("选中了", state.selectedObject)
+      if(state.selectedObject && state.selectedObject instanceof THREE.Mesh) {
+        console.log("材质：", state.selectedObject. material)
       }
     })
   }

@@ -44,7 +44,6 @@ export default class Picker {
     const intersects = this.raycastObjects(mouse, { recursive: true })
 
     if (intersects.length > 0) {
-      console.log('选中的对象：', intersects[0].object)
       this.selectorAdapter.selectObject(intersects[0].object)
     } else {
     }

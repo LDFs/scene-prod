@@ -23,6 +23,11 @@ const useAssetsStore = defineStore('assetsStore', () => {
       path: base('mars.jpg'),
       type: 'texture',
     },
+    {
+      id: 'floatIsland',
+      path: new URL(`../assets/models/forest_house.glb`, import.meta.url).href,
+      type: 'model'
+    }
   ])
   // shallowRef：Texture 是 three 的复杂对象，深层响应式会把它包成 Proxy，
   // 导致 renderer 内部的引用比较/缓存失效，这里只需要整体替换时触发更新

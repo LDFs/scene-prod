@@ -20,9 +20,10 @@ const canvasRef = ref<HTMLElement | null>(null)
 onMounted(() => {
   if (canvasRef.value) {
     const app = App.create(canvasRef.value)
-    App.loadTexture()
+    App.loadAssets()
     const environment = new Environment()
     environment.makeUpScene()
+
     const loop = new Loop(app.scene.scene, app.camera, app.renderer, environment)
     loop.start()
   }

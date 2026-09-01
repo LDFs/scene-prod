@@ -37,8 +37,9 @@ export default class App {
     return instance
   }
 
-  static loadTexture() {
+  static loadAssets() {
     App.current.assetLoader.loadTexture()
+    App.current.assetLoader.loadModels()
   }
 
 }
