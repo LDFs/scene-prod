@@ -3,32 +3,30 @@
     <div class="header">
       <router-link to="/" class="home-link">← 返回主页</router-link>
       <h1>资产管理</h1>
-      <button class="upload-btn" @click="triggerFileInput">
-        <span>📤</span> 上传资产
-      </button>
-      <input ref="fileInput" type="file" multiple accept=".gltf,.glb,.jpg,.jpeg,.png,.hdr,.exr, .obj, .mtl, .zip, .fbx" @change="handleFileSelect"
-        style="display: none" />
+      <button class="upload-btn" @click="triggerFileInput"><span>📤</span> 上传资产</button>
+      <input
+        ref="fileInput"
+        type="file"
+        multiple
+        accept=".gltf,.glb,.jpg,.jpeg,.png,.hdr,.exr, .obj, .mtl, .zip, .fbx"
+        @change="handleFileSelect"
+        style="display: none"
+      />
     </div>
 
     <div class="filter-bar">
-      <button :class="['filter-btn', { active: currentFilter === null }]" @click="setFilter(null)">
-        全部
-      </button>
-      <button :class="['filter-btn', { active: currentFilter === 'model' }]" @click="setFilter('model')">
-        模型
-      </button>
+      <button :class="['filter-btn', { active: currentFilter === null }]" @click="setFilter(null)">全部</button>
+      <button :class="['filter-btn', { active: currentFilter === 'model' }]" @click="setFilter('model')">模型</button>
       <button :class="['filter-btn', { active: currentFilter === 'texture' }]" @click="setFilter('texture')">
         贴图
       </button>
-      <button :class="['filter-btn', { active: currentFilter === 'hdri' }]" @click="setFilter('hdri')">
-        HDRI
-      </button>
+      <button :class="['filter-btn', { active: currentFilter === 'hdri' }]" @click="setFilter('hdri')">HDRI</button>
     </div>
 
     <div class="assets-grid" v-if="assets.length > 0">
-      <div v-for="asset in filteredAssets" :key="asset._id" class="asset-card">
+      <div v-for="asset in filteredAssets" :key="asset._id" class="asset-card" @click="() => showAssetsDialog(asset)">
         <div class="asset-preview">
-          <img v-if="asset.thumbnail" :src="getThumbnailUrl(asset)" :alt="asset.name" class="asset-thumb">
+          <img v-if="asset.thumbnail" :src="getThumbnailUrl(asset)" :alt="asset.name" class="asset-thumb" />
           <span v-else class="asset-icon">{{ getAssetIcon(asset.type) }}</span>
         </div>
         <div class="asset-info">
@@ -41,12 +39,8 @@
           </div>
         </div>
         <div class="asset-actions">
-          <button class="action-btn download-btn" @click="handleDownload(asset)" title="下载">
-            ⬇️
-          </button>
-          <button class="action-btn delete-btn" @click="handleDelete(asset)" title="删除">
-            🗑️
-          </button>
+          <button class="action-btn download-btn" @click="handleDownload(asset)" title="下载">⬇️</button>
+          <button class="action-btn delete-btn" @click="handleDelete(asset)" title="删除">🗑️</button>
         </div>
       </div>
     </div>
@@ -63,37 +57,44 @@
         <p>{{ uploadStatus }}</p>
       </div>
     </div>
+
+    <div class="display-dialog" v-if="showDisplay">
+      <button class="close-dialog-btn" @click="closeDialog">×</button>
+      <div v-if="showModel" class="dialog-canvas-container" ref="dialogCanvasContainer"></div>
+      <img v-if="showImg" class="dialog-img" ref="displayImg" src="" alt="" />
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted } from 'vue';
-import { AssetWithId } from '@scene-prod/shared';
-import { uploadAsset, getAssets, deleteAsset, downloadAsset, waitForProcessing } from '../services/asset';
-import { BASE_URL } from '@root/config.ts';
-import { message } from '../utils/message';
-import { ThumbnailGenerator } from '@scene-prod/core';
+import { ref, computed, onMounted, onUnmounted, nextTick, Ref } from 'vue'
+import { AssetWithId } from '@scene-prod/shared'
+import { uploadAsset, getAssets, deleteAsset, downloadAsset, waitForProcessing } from '../services/asset'
+import { BASE_URL } from '@root/config.ts'
+import { message } from '../utils/message'
+import { ThumbnailGenerator } from '@scene-prod/core'
+import { Group, Object3D } from 'three'
 
-const assets = ref<AssetWithId[]>([]);
-const currentFilter = ref<string | null>(null);
-const uploading = ref(false);
-const uploadStatus = ref('');
-const fileInput = ref<HTMLInputElement | null>(null);
+const assets = ref<AssetWithId[]>([])
+const currentFilter = ref<string | null>(null)
+const uploading = ref(false)
+const uploadStatus = ref('')
+const fileInput = ref<HTMLInputElement | null>(null)
 
 const filteredAssets = computed(() => {
   if (currentFilter.value === null) {
-    return assets.value;
+    return assets.value
   }
-  return assets.value.filter(asset => asset.type === currentFilter.value);
-});
+  return assets.value.filter((asset) => asset.type === currentFilter.value)
+})
 
 const triggerFileInput = () => {
-  fileInput.value?.click();
-};
+  fileInput.value?.click()
+}
 
 const setFilter = (filter: string | null) => {
-  currentFilter.value = filter;
-};
+  currentFilter.value = filter
+}
 /**
  * 支持选择多个文件后，要怎么处理？
  * 循环，每个文件按之前的处理逻辑
@@ -102,13 +103,13 @@ const setFilter = (filter: string | null) => {
  */
 let thumbnailGenerator: ThumbnailGenerator | null = null
 const handleFileSelect = async (event: Event) => {
-  const files = (event.target as HTMLInputElement).files;
-  if(!files || files.length === 0) return 
+  const files = (event.target as HTMLInputElement).files
+  if (!files || files.length === 0) return
 
-  for(let i = 0; i < files.length; i++){
+  for (let i = 0; i < files.length; i++) {
     handleOneFile(files[i], files)
   }
-};
+}
 
 const handleOneFile = async (file: File, files: FileList) => {
   if (!file) {
@@ -125,23 +126,22 @@ const handleOneFile = async (file: File, files: FileList) => {
     }
     if (['gltf', 'glb'].includes(ext)) {
       try {
-        
         thumbnail = await thumbnailGenerator.generate(file)
       } catch (error) {
         console.error('生成缩略图失败:', error)
       }
-    }else if(['fbx'].includes(ext)) {
+    } else if (['fbx'].includes(ext)) {
       try {
         thumbnail = await thumbnailGenerator.generateWithFbx(file)
       } catch (error) {
         console.error('生成缩略图失败:', error)
       }
-    }else if(['obj'].includes(ext)) {
+    } else if (['obj'].includes(ext)) {
       // 判断是否有同名的 mtl 文件
       let sameNameMtl = null
       let objName = file.name.slice(0, file.name.lastIndexOf('.'))
-      for(let f of files) {
-        if(f.name.slice(0, file.name.lastIndexOf('.')) === objName) {
+      for (let f of files) {
+        if (f.name.slice(0, file.name.lastIndexOf('.')) === objName) {
           sameNameMtl = f
         }
       }
@@ -170,7 +170,7 @@ const handleOneFile = async (file: File, files: FileList) => {
 
 async function loadAssets() {
   const result = await getAssets(currentFilter.value ?? '')
-  if(result.success) {
+  if (result.success) {
     assets.value = result.assets
   } else {
     message.error('获取资产列表失败:' + result.message)
@@ -183,11 +183,50 @@ const handleDownload = async (asset: AssetWithId) => {
 
 const handleDelete = async (asset: AssetWithId) => {
   const result = await deleteAsset(asset._id)
-  if(result.success) {
+  if (result.success) {
     message.success('删除成功:' + result.message)
     await loadAssets()
   } else {
     message.error('删除失败:' + result.message)
+  }
+}
+
+const dialogCanvasContainer = ref()
+const displayImg: Ref<HTMLElement | null> = ref(null)
+const showDisplay = ref(false)
+const showModel = ref(false)
+const showImg = ref(false)
+let showedModel: Object3D | Group | undefined = undefined
+const showAssetsDialog = (asset: AssetWithId) => {
+  if (!thumbnailGenerator) {
+    thumbnailGenerator = new ThumbnailGenerator(100, 100)
+  }
+  showDisplay.value = true
+  console.log('asset:', asset)
+  const assetUrl = asset.cloudUrls?.compressed ?? ''
+  if (assetUrl.endsWith('glb') || assetUrl.endsWith('gltf')) {
+    showModel.value = true
+    nextTick(async () => {
+      showedModel = await thumbnailGenerator?.showDialogScene(dialogCanvasContainer.value, assetUrl)
+    })
+  } else if (['jpg', 'jpeg', 'png'].includes(asset.format)) {
+    showImg.value = true
+    nextTick(() => {
+      let url = asset.cloudUrls?.file ?? ''
+      if (!url.startsWith('http')) {
+        url = 'https://' + url
+      }
+      displayImg.value?.setAttribute('src', url)
+    })
+  }
+}
+
+const closeDialog = () => {
+  showDisplay.value = false
+  showModel.value = false
+  showImg.value = false
+  if (showedModel) {
+    thumbnailGenerator?.cleanDisplay(showedModel)
   }
 }
 
@@ -196,42 +235,41 @@ const getAssetIcon = (type: string) => {
     model: '🎨',
     texture: '🖼️',
     hdri: '🌅',
-    effect: '✨'
-  };
-  return icons[type as keyof typeof icons] || '📦';
-};
+    effect: '✨',
+  }
+  return icons[type as keyof typeof icons] || '📦'
+}
 
 /**
  * 获取缩略图 URL，优先使用云端 URL
  */
- const getThumbnailUrl = (asset: AssetWithId) => {
+const getThumbnailUrl = (asset: AssetWithId) => {
   // 优先使用云端 URL
   if (asset.cloudUrls?.thumbnail) {
-    return 'https://' + asset.cloudUrls.thumbnail;
+    return 'https://' + asset.cloudUrls.thumbnail
   }
   // 降级到本地路径
-  return BASE_URL + asset.thumbnail;
-};
+  return BASE_URL + asset.thumbnail
+}
 
 const formatFileSize = (bytes: number | undefined) => {
-  if (!bytes) return '0 B';
-  if (bytes < 1024) return bytes + ' B';
-  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(2) + ' KB';
-  return (bytes / (1024 * 1024)).toFixed(2) + ' MB';
-};
+  if (!bytes) return '0 B'
+  if (bytes < 1024) return bytes + ' B'
+  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(2) + ' KB'
+  return (bytes / (1024 * 1024)).toFixed(2) + ' MB'
+}
 
 onMounted(() => {
-  loadAssets();
-});
+  loadAssets()
+})
 
 // 🧹 组件卸载时清理资源，防止内存泄漏
 onUnmounted(() => {
   if (thumbnailGenerator) {
-    thumbnailGenerator.dispose();
-    thumbnailGenerator = null;
+    thumbnailGenerator.dispose()
+    thumbnailGenerator = null
   }
-});
-
+})
 </script>
 
 <style scoped>
@@ -333,7 +371,9 @@ onUnmounted(() => {
   background: #2a2a2a;
   border-radius: 8px;
   overflow: hidden;
-  transition: transform 0.2s, box-shadow 0.2s;
+  transition:
+    transform 0.2s,
+    box-shadow 0.2s;
   cursor: pointer;
 }
 
@@ -465,5 +505,42 @@ onUnmounted(() => {
   width: 100%;
   height: 100%;
   object-fit: cover;
+}
+
+.display-dialog {
+  width: 100vw;
+  height: 100vh;
+  position: fixed;
+  left: 0;
+  top: 0;
+  background-color: rgba(100, 100, 100, 0.6);
+}
+
+.close-dialog-btn {
+  border: none;
+  width: 80px;
+  height: 80px;
+  border-radius: 40px;
+  font-size: 50px;
+  cursor: pointer;
+  position: absolute;
+  right: 20px;
+  top: 20px;
+}
+
+.dialog-canvas-container {
+  width: 40vw;
+  height: 50vh;
+  margin: 0 auto;
+  top: 50%;
+  position: relative;
+  transform: translateY(-50%);
+}
+
+.dialog-img {
+  position: relative;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
 }
 </style>

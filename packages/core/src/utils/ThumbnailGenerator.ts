@@ -5,6 +5,9 @@ import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment
 import { OBJLoader } from 'three/examples/jsm/loaders/OBJLoader.js';
 import { MTLLoader } from 'three/examples/jsm/loaders/MTLLoader.js';
 import { FBXLoader } from 'three/examples/jsm/loaders/FBXLoader.js';
+import { OrbitControls } from 'three/examples/jsm/Addons.js'
+
+import {setResizer} from './sceneTools'
 
 
 export class ThumbnailGenerator {
@@ -166,7 +169,45 @@ export class ThumbnailGenerator {
     this.camera.updateProjectionMatrix()
   }
 
+  // 直接根据这个类，来创建查看场景
+  async showDialogScene(container: HTMLElement, url: string) {
+    if(!url.startsWith('http')){
+      url = 'https://' + url
+    }
+
+    const model = await this.gltfLoader.loadAsync(url)
+    console.log("load-model", model)
+    this.scene.add(model.scene)
+    this.renderer.render(this.scene, this.camera)
+    container?.append(this.renderer.domElement)
+    this.renderer.setSize(container.clientWidth, container.clientHeight)
+    this.camera.aspect = container.clientWidth/ container.clientHeight
+    // this.camera.position.set(10, 10, 10)
+    this.fitCameraToObject(model.scene)
+
+    const orbitControl = new OrbitControls(this.camera, this.renderer.domElement)
+    this.displayLoop(orbitControl)
+    window.addEventListener('resize', () => {
+      setResizer(this.camera, this.renderer, container)
+    })
+    return model.scene
+  }
+
+  displayLoop(orbitControl: OrbitControls) {
+    this.renderer.setAnimationLoop(() => {
+      this.renderer.render(this.scene, this.camera)
+      orbitControl.update()
+    })
+  }
+
+  cleanDisplay(model: THREE.Object3D) {
+    this.scene.remove(model)
+    this.cleanupModel(model)
+    this.renderer.setAnimationLoop(null)
+  }
+
   cleanupModel(model: THREE.Object3D) {
+    console.log("清理", model)
     model.traverse((child) => {
       if (child instanceof THREE.Mesh) {
         child.geometry?.dispose()

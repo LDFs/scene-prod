@@ -136,3 +136,20 @@ export function findFreePosition(newMesh: THREE.Mesh, scene: THREE.Scene, startP
 
   return startPos // 找不到时回退到原位
 }
+
+/**
+ * 窗口适配
+ */
+export function setResizer(
+  camera: THREE.PerspectiveCamera | THREE.OrthographicCamera,
+  renderer: THREE.WebGLRenderer,
+  container: HTMLElement,
+) {
+  if (camera instanceof THREE.PerspectiveCamera) {
+    camera.aspect = container.clientWidth / container.clientHeight
+    camera.updateProjectionMatrix()
+  }
+
+  renderer.setSize(container.clientWidth, container.clientHeight)
+  renderer.setPixelRatio(window.devicePixelRatio)
+}
