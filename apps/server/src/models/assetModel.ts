@@ -68,19 +68,20 @@ const AssetSchema = new mongoose.Schema<Asset>({
     lod0: String,            // LOD0 高精度
     lod1: String,            // LOD1 中精度
     lod2: String,            // LOD2 低精度
-    textures: {
-      original: String,
-      '2k': String,
-      '1k': String,
-      '512': String
-    }
+    // 纹理名 → { original | 2048 | 1024 | 512 } → 路径，键不固定故用 Mixed
+    textures: mongoose.Schema.Types.Mixed
   },
 
-  // 云端绝对路径 (又拍云 CDN)
+  // 云端绝对路径 (腾讯云 COS)
   cloudUrls: {
-    compressed: String,      // 又拍云 compressed GLB URL
-    thumbnail: String,       // 又拍云缩略图 URL
-    file: String             // 又拍云原始文件 URL (HDRI/贴图)
+    compressed: String,      // COS compressed GLB URL
+    thumbnail: String,       // COS 缩略图 URL
+    file: String,            // COS 原始文件 URL (HDRI/贴图)
+    lod0: String,            // COS LOD0 URL
+    lod1: String,            // COS LOD1 URL
+    lod2: String,            // COS LOD2 URL
+    // 与 processedFiles.textures 同构，值为 COS 地址
+    textures: mongoose.Schema.Types.Mixed
   },
 
   // 预计算边界数据

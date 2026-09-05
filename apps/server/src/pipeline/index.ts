@@ -1,8 +1,7 @@
 import { AssetModel } from '../models/assetModel'
 import { assetQueue } from './queue'
 import fs from 'fs'
-import path from 'path'
-import { uploadFile } from '@/services/upFile'
+import { publishToCloud } from './utils/publishToCloud'
 
 import { calculateBounds } from './processors/boundsCalculator'
 import { compressDraco } from './processors/dracoCompressor'
@@ -16,8 +15,6 @@ import { computeSizing } from './utils/sizing'
 import { AssetWithId } from '@scene-prod/shared'
 import { ProcessAssetType } from './type'
 
-const __dirname = path.resolve()
-
 async function processAsset(asset: AssetWithId) {
   const context: ProcessAssetType = {
     assetId: asset._id.toString(),
@@ -30,7 +27,7 @@ async function processAsset(asset: AssetWithId) {
     lods: null,
     textures: {},
     tempDir: '',
-    originalFormat: '',
+    originalFormat: asset.format,
   }
   console.log(`[Pipeline] 开始处理资产: ${asset.name} (${asset._id})`)
 
@@ -96,16 +93,18 @@ assetQueue.process('process', async (job) => {
     // 执行流水线
     context = await processAsset(asset)
 
-    // 上传 compressed 到云存储
-    let compressedCloudUrl = null
-    if (context.compressedPath) {
-      // 将相对路径转为绝对路径
-      const localPath = path.join(__dirname, context.compressedPath)
-      const remotePath = `/assets/compressed/${assetId}.glb`
-      try {
-        const res = await uploadFile(localPath, remotePath)
-        compressedCloudUrl = res.Location
-      } catch (err) {}
+    // 上传全部产物（compressed / LOD0-2 / 多分辨率纹理）到云存储
+    const cloud = await publishToCloud(assetId, context)
+
+    let uploadWarning: string | null = null
+    if (cloud.errors.length > 0) {
+      console.error(`[Pipeline] 云存储上传失败 ${cloud.errors.length}/${cloud.total} 个文件 (assetId=${assetId}):`)
+      cloud.errors.forEach((e) => console.error(`  ✗ ${e.key} → ${e.remotePath}: ${e.message}`))
+      uploadWarning = `云存储上传失败 ${cloud.errors.length}/${cloud.total} 个文件: ${cloud.errors
+        .map((e) => `${e.key}(${e.message})`)
+        .join('; ')}`
+    } else {
+      console.log(`[Pipeline] 云存储上传完成: ${cloud.total} 个文件`)
     }
 
     // 尺寸归一化:根据最长边启发式推断换算到米的缩放因子
@@ -114,22 +113,30 @@ assetQueue.process('process', async (job) => {
       console.log(`[Pipeline] 尺寸归一化: ×${sizing.normalizeScale} (猜测单位 ${sizing.unitGuess})`)
     }
 
-    // 更新资产记录
+    // 先落库：本地处理成果和已成功的云端地址不因个别上传失败而丢弃
     await AssetModel.findByIdAndUpdate(assetId, {
-      processingStatus: 'ready',
+      // compressed 是资产本体，它上传失败则整单判失败，交给队列重试
+      processingStatus: cloud.fatal ? 'failed' : 'ready',
+      processingError: uploadWarning,
       processedFiles: {
         compressed: '/' + context.compressedPath.replace(/\\/g, '/').replace(/^\/+/, ''),
         lod0: context.lods ? context.lods[0] : null,
         lod1: context.lods ? context.lods[1] : null,
         lod2: context.lods ? context.lods[2] : null,
-        texture: context.textures || {},
+        textures: context.textures || {},
       },
       bounds: context.bounds,
       stats: context.stats,
       ...(sizing ? { sizing } : {}),
-      'cloudUrls.compressed': compressedCloudUrl,
+      ...cloud.updates,
     })
     console.log('[保存到服务器路径]：', context.compressedPath)
+
+    if (cloud.fatal) {
+      // 抛出让 Bull 重试整条流水线；catch 分支会补写 failed 状态
+      throw new Error(uploadWarning ?? 'compressed 上传云存储失败')
+    }
+
     return { success: true, assetId }
   } catch (error: any) {
     console.error(`[Pipeline] 处理失败: ${assetId}`, error)

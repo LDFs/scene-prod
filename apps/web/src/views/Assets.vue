@@ -169,7 +169,11 @@ const handleOneFile = async (file: File, files: FileList) => {
 }
 
 async function loadAssets() {
-  const result = await getAssets(currentFilter.value ?? '')
+  const result = await getAssets({
+    type: currentFilter.value ?? '',
+    page: 1,
+    pageSize: 20
+  })
   if (result.success) {
     assets.value = result.assets
   } else {

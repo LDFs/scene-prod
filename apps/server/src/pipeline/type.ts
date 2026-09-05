@@ -38,7 +38,8 @@ export type ProcessAssetType = {
     materialCount: number,
     textureCount: number,
   } | null,
-  textures: {},
+  // 形如 { 纹理名: { original: 路径, '2048': 路径, '1024': 路径, '512': 路径 } }
+  textures: Record<string, Record<string, string>>,
   lods: Array<string> | null,
   tempDir: string,
   originalFormat: string

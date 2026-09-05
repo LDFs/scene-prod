@@ -24,19 +24,20 @@ export type Asset = {
     lod0?: string
     lod1?: string
     lod2?: string
-    textures?: {
-      original?: string
-      '2k'?: string
-      '1k'?: string
-      '512'?: string
-    }
+    // 纹理名 → { original | '2048' | '1024' | '512' } → 路径
+    textures?: Record<string, Record<string, string>>
   }
 
-  // 云端路径 (又拍云 CDN)
+  // 云端路径 (腾讯云 COS)
   cloudUrls?: {
     compressed?: string
     thumbnail?: string
     file?: string
+    lod0?: string
+    lod1?: string
+    lod2?: string
+    // 与 processedFiles.textures 同构，值为 COS 地址
+    textures?: Record<string, Record<string, string>>
   }
 
   // 预计算边界数据

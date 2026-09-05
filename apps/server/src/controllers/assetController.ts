@@ -5,7 +5,7 @@ import path from 'path'
 import fs from 'fs'
 import { AssetType } from '@scene-prod/shared'
 import { assetQueue, processAsset } from '@/pipeline'
-import { uploadFile, deleteObject } from '@/services/upFile'
+import { uploadFileWithRetry, deleteObject } from '@/services/upFile'
 
 const __dirname = path.resolve() // 在哪个地方运行的这个服务
 
@@ -64,10 +64,11 @@ async function uploadAsset(req: FastifyRequest, res: FastifyReply) {
     await fs.promises.writeFile(savePath, mainBuffer)
 
     let thumbnailUrl = ''
+    let thumbnailSavePath = ''
     if (thumbnailFile && thumbnailBuffer) {
       const thumbExt = path.extname(thumbnailFile.filename).toLowerCase() || '.png'
       const thumbFilename = `${uniqueSuffix}_thumb${thumbExt}`
-      const thumbnailSavePath = path.join(__dirname, 'uploads', 'thumbnails', thumbFilename)
+      thumbnailSavePath = path.join(__dirname, 'uploads', 'thumbnails', thumbFilename)
       await fs.promises.writeFile(thumbnailSavePath, thumbnailBuffer)
       thumbnailUrl = `/uploads/thumbnails/${thumbFilename}`
     }
@@ -100,39 +101,45 @@ async function uploadAsset(req: FastifyRequest, res: FastifyReply) {
     const asset = new AssetModel(assetData)
     await asset.save()
 
+    // 云存储上传失败不回滚已建的资产记录（文件仍在本地，可后续补传），
+    // 但必须记录日志并随响应返回，绝不静默吞掉
+    const warnings: string[] = []
+
     // 处理缩略图，上传到云存储, 在数据库中存储对应的url
-    if (thumbnailFile) {
-      const thumbExt = path.extname(thumbnailFile.filename).toLowerCase() || '.png'
-      const thumbFilename = `${uniqueSuffix}_thumb${thumbExt}`
-      const thumbnailSavePath = path.join(__dirname, 'uploads', 'thumbnails', thumbFilename)
-
+    if (thumbnailSavePath) {
       const remotePath = `/assets/thumbnails/${asset._id.toString()}.png`
-
       try {
-        const res = await uploadFile(thumbnailSavePath, remotePath)
-        if (res) {
-          await AssetModel.findByIdAndUpdate(asset._id, {
-            'cloudUrls.thumbnail': res.Location,
-          })
-          asset.cloudUrls = { thumbnail: res.Location }
-        }
-      } catch (err) {}
+        const res = await uploadFileWithRetry(thumbnailSavePath, remotePath)
+        await AssetModel.findByIdAndUpdate(asset._id, {
+          'cloudUrls.thumbnail': res.Location,
+        })
+        if (!asset.cloudUrls) asset.cloudUrls = {}
+        asset.cloudUrls.thumbnail = res.Location
+      } catch (err: any) {
+        const message = err?.message ?? String(err)
+        console.error(`[Upload] 缩略图上传云存储失败 (assetId=${asset._id}): ${message}`)
+        req.log.error({ err, assetId: asset._id.toString(), remotePath }, '缩略图上传云存储失败')
+        warnings.push(`缩略图上传云存储失败: ${message}`)
+      }
     }
     // HDRI 和贴图文件上传到云存储, 在数据库中存储对应的url
     if (assetType === 'hdri' || assetType === 'texture') {
-      const localPath = savePath
       const remotePath = `/assets/${assetType}/${asset._id.toString()}${ext}`
       try {
-        const res = await uploadFile(localPath, remotePath)
-        if (res) {
-          await AssetModel.findByIdAndUpdate(asset._id, {
-            'cloudUrls.file': res.Location,
-          })
-          if (!asset.cloudUrls) asset.cloudUrls = {}
-          asset.cloudUrls.file = res.Location
-          console.log(`[Upload] ${assetType} 已上传到云端: ${res.Location}`)
-        }
-      } catch (err) {}
+        const res = await uploadFileWithRetry(savePath, remotePath)
+        await AssetModel.findByIdAndUpdate(asset._id, {
+          'cloudUrls.file': res.Location,
+        })
+        if (!asset.cloudUrls) asset.cloudUrls = {}
+        asset.cloudUrls.file = res.Location
+        console.log(`[Upload] ${assetType} 已上传到云端: ${res.Location}`)
+      } catch (err: any) {
+        // 这是资产本体，前端靠 cloudUrls.file 访问，失败必须让调用方知道
+        const message = err?.message ?? String(err)
+        console.error(`[Upload] ${assetType} 上传云存储失败 (assetId=${asset._id}): ${message}`)
+        req.log.error({ err, assetId: asset._id.toString(), remotePath }, `${assetType} 上传云存储失败`)
+        warnings.push(`${assetType} 文件上传云存储失败: ${message}`)
+      }
     }
 
     // 如果是模型类型，加入处理队列
@@ -142,7 +149,12 @@ async function uploadAsset(req: FastifyRequest, res: FastifyReply) {
       console.log(`[Upload] 资产已加入处理队列: ${asset._id}`)
     }
 
-    return res.status(200).send({ success: true, asset, message: '资产上传成功' })
+    return res.status(200).send({
+      success: true,
+      asset,
+      ...(warnings.length > 0 ? { warnings } : {}),
+      message: warnings.length > 0 ? '资产上传成功，但部分文件未同步到云存储' : '资产上传成功',
+    })
   } catch (error) {
     req.log.error(error)
     return res.status(500).send({ success: false, message: '上传资产失败' })
@@ -273,9 +285,17 @@ async function deleteAsset(req: FastifyRequest, res: FastifyReply) {
 
     // 删除云端文件
     if (asset.cloudUrls) {
-      console.log('[删除云端文件]:', asset.cloudUrls);
-      asset.cloudUrls.compressed && deleteObject(asset.cloudUrls.compressed)
-      asset.cloudUrls.thumbnail && deleteObject(asset.cloudUrls.thumbnail)
+      console.log('[删除云端文件]:', asset.cloudUrls)
+      const cloud = asset.cloudUrls
+      const cloudSingles = [cloud.compressed, cloud.thumbnail, cloud.file, cloud.lod0, cloud.lod1, cloud.lod2]
+      cloudSingles.forEach((url) => url && deleteObject(url))
+      // 纹理是 { 纹理名: { 分辨率: url } } 两层结构
+      if (cloud.textures && typeof cloud.textures === 'object') {
+        Object.values(cloud.textures).forEach((variants) => {
+          if (!variants || typeof variants !== 'object') return
+          Object.values(variants).forEach((url) => typeof url === 'string' && deleteObject(url))
+        })
+      }
     }
 
     // 删除数据库记录

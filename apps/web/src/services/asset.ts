@@ -1,7 +1,10 @@
 import { AssetWithId } from '@scene-prod/shared'
 import { ASSET_BASE_URL, BASE_URL } from '../../config.js'
 
-export async function uploadAsset(file: File, thumbnail: Blob | null = null): Promise<{ success: boolean, message: string, asset: any }> {
+export async function uploadAsset(
+  file: File,
+  thumbnail: Blob | null = null,
+): Promise<{ success: boolean; message: string; asset: any }> {
   const formData = new FormData()
   formData.append('file', file)
   if (thumbnail) {
@@ -9,10 +12,9 @@ export async function uploadAsset(file: File, thumbnail: Blob | null = null): Pr
     formData.append('thumbnail', thumbnail, thumbnailName)
   }
   try {
-
     const response = await fetch(`${ASSET_BASE_URL}/upload`, {
       method: 'POST',
-      body: formData
+      body: formData,
     })
     const data = await response.json()
     return data
@@ -21,14 +23,20 @@ export async function uploadAsset(file: File, thumbnail: Blob | null = null): Pr
     return {
       success: false,
       message: '上传资产失败',
-      asset: null
+      asset: null,
     }
   }
 }
 
-export async function getAssets(type: string): Promise<{ success: boolean, message: string, assets: AssetWithId[] }> {
+export async function getAssets(params: {
+  type: string
+  page: number
+  pageSize: number
+}): Promise<{ success: boolean; message: string; assets: AssetWithId[] }> {
   try {
-    const url = type ? `${ASSET_BASE_URL}/list?type=${type}` : `${ASSET_BASE_URL}/list`;
+    const url = params.type
+      ? `${ASSET_BASE_URL}/list?type=${params.type}&page=${params.page}&pageSize=${params.pageSize}`
+      : `${ASSET_BASE_URL}/list?page=${params.page}&pageSize=${params.pageSize}`
     const response = await fetch(url)
     const data = await response.json()
     return data
@@ -37,14 +45,17 @@ export async function getAssets(type: string): Promise<{ success: boolean, messa
     return {
       success: false,
       message: '获取资产列表失败',
-      assets: []
+      assets: [],
     }
   }
 }
 
-export async function getAssetByName(type: string, name: String): Promise<{ success: boolean, message: string, asset: AssetWithId|null }> {
+export async function getAssetByName(
+  type: string,
+  name: String,
+): Promise<{ success: boolean; message: string; asset: AssetWithId | null }> {
   try {
-    const url = `${ASSET_BASE_URL}/get-by-name?type=${type}&name=${name}`;
+    const url = `${ASSET_BASE_URL}/get-by-name?type=${type}&name=${name}`
     const response = await fetch(url)
     const data = await response.json()
     return data
@@ -53,15 +64,15 @@ export async function getAssetByName(type: string, name: String): Promise<{ succ
     return {
       success: false,
       message: '获取资产失败',
-      asset: null
+      asset: null,
     }
   }
 }
 
-export async function deleteAsset(id: string): Promise<{ success: boolean, message: string }> {
+export async function deleteAsset(id: string): Promise<{ success: boolean; message: string }> {
   try {
     const response = await fetch(`${ASSET_BASE_URL}/delete?id=${id}`, {
-      method: 'DELETE'
+      method: 'DELETE',
     })
     const data = await response.json()
     return data
@@ -69,7 +80,7 @@ export async function deleteAsset(id: string): Promise<{ success: boolean, messa
     console.error('删除资产失败:', error)
     return {
       success: false,
-      message: '删除资产失败'
+      message: '删除资产失败',
     }
   }
 }
@@ -84,7 +95,7 @@ export async function downloadAsset(id: string, filename: string) {
   document.body.removeChild(link)
 }
 
-export async function getProcessingStatus(id: string): Promise<{ success: boolean, message: string, status: string }> {
+export async function getProcessingStatus(id: string): Promise<{ success: boolean; message: string; status: string }> {
   try {
     const response = await fetch(`${ASSET_BASE_URL}/processing-status?id=${id}`)
     const data = await response.json()
@@ -94,7 +105,7 @@ export async function getProcessingStatus(id: string): Promise<{ success: boolea
     return {
       success: false,
       message: '获取处理状态失败',
-      status: 'unknown'
+      status: 'unknown',
     }
   }
 }
@@ -106,7 +117,11 @@ export async function getProcessingStatus(id: string): Promise<{ success: boolea
  * @param maxAttempts 最大尝试次数，默认10次
  * @returns 处理结果
  */
-export async function waitForProcessing(id: string, interval: number = 2000, maxAttempts: number = 10): Promise<{ success: boolean, message: string, status: string }> {
+export async function waitForProcessing(
+  id: string,
+  interval: number = 2000,
+  maxAttempts: number = 10,
+): Promise<{ success: boolean; message: string; status: string }> {
   return new Promise((resolve, reject) => {
     let attempts = 0
 
@@ -114,11 +129,11 @@ export async function waitForProcessing(id: string, interval: number = 2000, max
       attempts++
       try {
         const result = await getProcessingStatus(id)
-        if(result.status === 'ready') {
+        if (result.status === 'ready') {
           resolve(result)
-        } else if(result.status === 'failed') {
+        } else if (result.status === 'failed') {
           reject(new Error(result.message))
-        } else if(attempts >= maxAttempts) {
+        } else if (attempts >= maxAttempts) {
           reject(new Error('处理超时'))
         } else {
           setTimeout(check, interval)
@@ -139,10 +154,11 @@ export function getAssetUrl(asset: AssetWithId): string {
 }
 
 export function getModelUrl(asset: AssetWithId): string {
-  if(asset.cloudUrls?.compressed) {
+  if (asset.cloudUrls?.compressed) {
+    if(asset.cloudUrls?.compressed.startsWith('http')) return asset.cloudUrls?.compressed
     return 'https://' + asset.cloudUrls.compressed
   }
-  if(asset.processingStatus === 'ready' && asset.processedFiles?.compressed) {
+  if (asset.processingStatus === 'ready' && asset.processedFiles?.compressed) {
     return `${BASE_URL}${asset.processedFiles.compressed}`
   }
   return getAssetUrl(asset)
@@ -150,17 +166,24 @@ export function getModelUrl(asset: AssetWithId): string {
 
 /**
  * 获取 LOD 模型 URL
- * @param asset 
+ * @param asset
  * @param lod LOD 级别，0 1 2
  * @returns LOD 模型 URL
  */
 export function getLodUrl(asset: AssetWithId, lod: number): string {
-  if(asset.processingStatus !== 'ready' || !asset.processedFiles) {
+  const lodKey = `lod${lod}` as 'lod0' | 'lod1' | 'lod2'
+
+  // 优先走云存储
+  const cloudUrl = asset.cloudUrls?.[lodKey]
+  if (cloudUrl) {
+    return cloudUrl.startsWith('http') ? cloudUrl : 'https://' + cloudUrl
+  }
+
+  if (asset.processingStatus !== 'ready' || !asset.processedFiles) {
     return ''
   }
-  const lodKey = `lod${lod}`
-  const lodPath = asset.processedFiles[lodKey as keyof typeof asset.processedFiles]
-  if(lodPath) {
+  const lodPath = asset.processedFiles[lodKey]
+  if (lodPath) {
     return `${BASE_URL}${lodPath}`
   }
   return ''

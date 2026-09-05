@@ -99,9 +99,9 @@ const loadAssets = async (silent = false) => {
   try {
     const all = [models, environments, tilesets]
     await Promise.allSettled([
-      getAssets('model'),
-      getAssets('hdri'),
-      getAssets('tileset')
+      getAssets({type: 'model', page: 1, pageSize: 10}),
+      getAssets({type: 'hdri', page: 1, pageSize: 10}),
+      getAssets({type: 'tileset', page: 1, pageSize: 10})
     ]).then((results) => {
       results.forEach((result, index) => {
         if(result.status === 'fulfilled'){
