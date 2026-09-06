@@ -12,13 +12,22 @@ import { ProcessAssetType } from '../type'
 export async function compressDraco(context: ProcessAssetType) {
   const io = await createNodeIO()
 
-  try {
-    const inputPath = context.gltfPath
-    const baseName = path.basename(inputPath, path.extname(inputPath))
-    const outputPath = path.join('uploads/processed/models', `${baseName}_compressed.glb`)
-    // 读取文件
-    const document = await io.read(inputPath)
+  const inputPath = context.gltfPath
+  const baseName = path.basename(inputPath, path.extname(inputPath))
+  const outputPath = path.join('uploads/processed/models', `${baseName}_compressed.glb`)
 
+  // 读取失败通常意味着资源不全（缺 .bin 或贴图）。这种情况不能降级继续：
+  // 往下走只会把一份残缺产物推到流水线末尾，让错误暴露在前端加载场景时。
+  let document
+  try {
+    document = await io.read(inputPath)
+  } catch (error: any) {
+    const message = error?.message ?? String(error)
+    console.error('[DracoCompressor] 读取模型失败:', message)
+    throw new Error(`读取模型失败，可能缺少 .bin 或贴图等依赖资源: ${message}`)
+  }
+
+  try {
     //应用 Draco 压缩
     await document.transform(
       draco({
@@ -47,7 +56,7 @@ export async function compressDraco(context: ProcessAssetType) {
     return outputPath
   } catch (error: any) {
     console.error('[DracoCompressor] 压缩失败:', error.message)
-    // 压缩失败返回原始路径
+    // 仅 Draco 压缩本身失败时降级：模型是完整的，用未压缩版本继续流水线
     return context.gltfPath
   }
 }

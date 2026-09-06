@@ -110,41 +110,56 @@ export async function getProcessingStatus(id: string): Promise<{ success: boolea
   }
 }
 
+export type ProcessingOutcome = {
+  /** 是否处理成功（ready 或无需处理的 skipped） */
+  ok: boolean
+  status: 'ready' | 'failed' | 'skipped' | 'timeout' | 'unknown'
+  message: string
+}
+
 /**
- * 等待资产处理完成
- * @param id 资产ID
- * @param interval 检查间隔时间，默认2秒
- * @param maxAttempts 最大尝试次数，默认10次
- * @returns 处理结果
+ * 轮询等待资产处理完成。
+ *
+ * 终态（ready / failed / skipped）都通过返回值告知，不用 reject 表达"处理失败"
+ * ——那是业务结果而非异常，调用方需要照常拿到失败原因展示给用户。
+ *
+ * @param interval 轮询间隔，默认 2 秒
+ * @param timeout 最长等待时间，默认 5 分钟。Draco 压缩 + LOD 生成 + 纹理优化
+ *                在大模型上耗时可达数分钟，超时不代表失败，只是不再等待。
  */
 export async function waitForProcessing(
   id: string,
   interval: number = 2000,
-  maxAttempts: number = 10,
-): Promise<{ success: boolean; message: string; status: string }> {
-  return new Promise((resolve, reject) => {
-    let attempts = 0
+  timeout: number = 5 * 60 * 1000,
+): Promise<ProcessingOutcome> {
+  const deadline = Date.now() + timeout
 
-    const check = async () => {
-      attempts++
-      try {
-        const result = await getProcessingStatus(id)
-        if (result.status === 'ready') {
-          resolve(result)
-        } else if (result.status === 'failed') {
-          reject(new Error(result.message))
-        } else if (attempts >= maxAttempts) {
-          reject(new Error('处理超时'))
-        } else {
-          setTimeout(check, interval)
-        }
-      } catch (error) {
-        reject(error)
+  while (true) {
+    const result = await getProcessingStatus(id)
+
+    if (result.status === 'ready') {
+      return { ok: true, status: 'ready', message: result.message }
+    }
+    if (result.status === 'skipped') {
+      return { ok: true, status: 'skipped', message: result.message }
+    }
+    if (result.status === 'failed') {
+      return { ok: false, status: 'failed', message: result.message }
+    }
+    // 查询本身失败（网络错误、资产不存在）不重试，直接如实返回
+    if (!result.success) {
+      return { ok: false, status: 'unknown', message: result.message }
+    }
+    if (Date.now() + interval >= deadline) {
+      return {
+        ok: false,
+        status: 'timeout',
+        message: '处理时间较长，请稍后刷新列表查看结果',
       }
     }
 
-    check()
-  })
+    await new Promise((resolve) => setTimeout(resolve, interval))
+  }
 }
 
 export function getAssetUrl(asset: AssetWithId): string {

@@ -6,6 +6,7 @@ import fs from 'fs'
 import { AssetType } from '@scene-prod/shared'
 import { assetQueue, processAsset } from '@/pipeline'
 import { uploadFileWithRetry, deleteObject } from '@/services/upFile'
+import { collectExternalUris, parseGltf } from '@/pipeline/utils/gltfDeps'
 
 const __dirname = path.resolve() // 在哪个地方运行的这个服务
 
@@ -56,9 +57,30 @@ async function uploadAsset(req: FastifyRequest, res: FastifyReply) {
       return res.status(413).send({ success: false, message: '文件过大' })
     }
 
+    const ext = path.extname(mainFile.filename).toLowerCase()
+
+    // .gltf 靠相对 uri 引用 .bin 和贴图。单文件上传必然缺依赖，处理流水线和前端
+    // 加载都会失败，且失败点离原因很远。入口直接拒绝，避免坏数据入库并占用云存储。
+    if (ext === '.gltf') {
+      let externalUris: string[] = []
+      try {
+        externalUris = collectExternalUris(parseGltf(mainBuffer.toString('utf-8'), mainFile.filename))
+      } catch (err: any) {
+        return res.status(400).send({ success: false, message: err.message })
+      }
+      if (externalUris.length > 0) {
+        return res.status(400).send({
+          success: false,
+          message: `该 .gltf 依赖 ${externalUris.length} 个外部文件（${externalUris.join(
+            '、',
+          )}），单独上传会缺少资源。请连同依赖一起打包成 .zip 再上传`,
+          missingDependencies: externalUris,
+        })
+      }
+    }
+
     // 保存文件到本地
     const uniqueSuffix = `${Date.now()}-${Math.round(Math.random() * 1e9)}`
-    const ext = path.extname(mainFile.filename).toLowerCase()
     const newFilename = `${uniqueSuffix}${ext}`
     const savePath = path.join(__dirname, 'uploads', 'models', newFilename)
     await fs.promises.writeFile(savePath, mainBuffer)
@@ -220,6 +242,64 @@ async function getAssetById(req: FastifyRequest, res: FastifyReply) {
   }
 }
 
+/**
+ * 查询资产的流水线处理状态。
+ *
+ * 上传接口返回 200 只代表"文件已收下、任务已入队"，真正的处理在 Bull 队列里
+ * 异步进行。失败信息此前只写进数据库、无人读取，前端因此完全看不到异步失败。
+ * 这个端点就是那条回传通道。
+ */
+async function getProcessingStatus(req: FastifyRequest, res: FastifyReply) {
+  try {
+    const { id } = req.query as { id: string }
+    if (!id) {
+      return res.status(400).send({ success: false, message: '缺少参数 id', status: 'unknown' })
+    }
+
+    const asset = await AssetModel.findById(id).select('processingStatus processingError name').lean()
+    if (!asset) {
+      return res.status(404).send({ success: false, message: '资产不存在', status: 'unknown' })
+    }
+
+    const status = asset.processingStatus ?? 'skipped'
+    return res.status(200).send({
+      success: true,
+      status,
+      // 前端直接展示这条，所以过滤掉纯内部细节
+      message: status === 'failed' ? toUserFacingError(asset.processingError) : '获取处理状态成功',
+    })
+  } catch (error) {
+    req.log.error(error)
+    return res.status(500).send({ success: false, message: '获取处理状态失败', status: 'unknown' })
+  }
+}
+
+/**
+ * 把流水线的错误原文转成对用户有意义的说明。
+ *
+ * processingError 里既有用户能据此行动的原因（缺依赖资源、格式不支持），也有
+ * gltf-transform / Draco 抛出的内部细节。后者直接展示只会让人困惑，统一收敛成
+ * 一句兜底话术，具体内容留在服务端日志里排查。
+ */
+function toUserFacingError(raw?: string | null): string {
+  if (!raw) return '模型处理失败'
+
+  // 这些是前置校验和格式转换主动抛出的、面向用户的原因，原文透出
+  const actionablePatterns = [
+    /缺少 \d+ 个依赖资源/,
+    /缺少 \.bin 或贴图/,
+    /未找到支持的模型文件/,
+    /不是有效的 glTF JSON/,
+    /格式转换暂不支持/,
+    /暂不支持的格式/,
+    /云存储上传失败/,
+  ]
+  if (actionablePatterns.some((pattern) => pattern.test(raw))) {
+    return raw
+  }
+  return '模型处理失败，请检查文件是否完整或联系管理员'
+}
+
 async function deleteAsset(req: FastifyRequest, res: FastifyReply) {
   try {
     const { id } = req.query as { id: string }
@@ -349,4 +429,12 @@ async function downloadAsset(req: FastifyRequest, res: FastifyReply) {
   }
 }
 
-export { uploadAsset, getAssets, getAssetById, deleteAsset, downloadAsset, getAssetByName }
+export {
+  uploadAsset,
+  getAssets,
+  getAssetById,
+  deleteAsset,
+  downloadAsset,
+  getAssetByName,
+  getProcessingStatus,
+}

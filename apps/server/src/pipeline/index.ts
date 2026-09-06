@@ -12,6 +12,7 @@ import { extractZip } from './processors/zipExtractor'
 import { sanitize } from './processors/sanitizer'
 import { optimizeSceneGraph } from './processors/optimizeSceneGraph'
 import { computeSizing } from './utils/sizing'
+import { findMissingGltfDeps } from './utils/gltfDeps'
 import { AssetWithId } from '@scene-prod/shared'
 import { ProcessAssetType } from './type'
 
@@ -35,6 +36,14 @@ async function processAsset(asset: AssetWithId) {
   if (context.originalFormat === 'zip') {
     console.log('[Pipeline] Step 0: ZIP 解压')
     context.inputPath = await extractZip(context)
+  }
+
+  // Step 0.5: 依赖完整性检查
+  // .gltf 引用的 .bin / 贴图必须都在。缺失时立刻失败并说明缺什么，
+  // 否则错误会一路拖到 Draco 读取甚至前端加载场景时才暴露。
+  const missingDeps = findMissingGltfDeps(context.inputPath)
+  if (missingDeps.length > 0) {
+    throw new Error(`模型缺少 ${missingDeps.length} 个依赖资源: ${missingDeps.join('、')}`)
   }
 
   // Step 1: 格式转换 (OBJ/FBX/STL → GLB)
