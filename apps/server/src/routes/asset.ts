@@ -8,6 +8,7 @@ import {
   uploadAsset,
   getAssetByName,
   getProcessingStatus,
+  renameAsset,
 } from '../controllers/assetController'
 
 export default async function assetRoutes(fastify: FastifyInstance) {
@@ -15,6 +16,7 @@ export default async function assetRoutes(fastify: FastifyInstance) {
   fastify.get('/api/scene-prod/assets/list', getAssets)
   fastify.get('/api/scene-prod/assets/get', getAssetById)
   fastify.get('/api/scene-prod/assets/get-by-name', getAssetByName)
+  fastify.post('/api/scene-prod/assets/rename', renameAsset)
   fastify.delete('/api/scene-prod/assets/delete', deleteAsset)
   fastify.get('/api/scene-prod/assets/download', downloadAsset)
   fastify.get('/api/scene-prod/assets/processing-status', getProcessingStatus)

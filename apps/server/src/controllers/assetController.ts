@@ -227,6 +227,50 @@ async function getAssetByName(req: FastifyRequest, res: FastifyReply) {
   }
 }
 
+/**
+ * 重命名资产。
+ *
+ * name 不只是展示用的标签：getAssetByName 以 (type, name) 作为查询键，
+ * Viewport 就靠它按名字取材质。所以同类型下的重名必须挡掉，
+ * 否则 findOne 会静默返回其中一条，表现为"改了个名字，场景里的材质就换了"。
+ */
+async function renameAsset(req: FastifyRequest, res: FastifyReply) {
+  try {
+    const { id, name } = req.body as { id?: string; name?: string }
+    if (!id) {
+      return res.status(400).send({ success: false, message: '缺少参数 id' })
+    }
+
+    const newName = (name ?? '').trim()
+    if (!newName) {
+      return res.status(400).send({ success: false, message: '名称不能为空' })
+    }
+    if (newName.length > 100) {
+      return res.status(400).send({ success: false, message: '名称不能超过 100 个字符' })
+    }
+
+    const asset = await AssetModel.findById(id)
+    if (!asset) {
+      return res.status(404).send({ success: false, message: '资产不存在' })
+    }
+
+    // 改成一样的名字直接当作成功，不必写库
+    if (asset.name !== newName) {
+      const duplicated = await AssetModel.exists({ _id: { $ne: asset._id }, type: asset.type, name: newName })
+      if (duplicated) {
+        return res.status(409).send({ success: false, message: '同类型下已存在同名资产' })
+      }
+      asset.name = newName
+      await asset.save()
+    }
+
+    return res.status(200).send({ success: true, asset, message: '重命名成功' })
+  } catch (error) {
+    req.log.error(error)
+    return res.status(500).send({ success: false, message: '重命名失败' })
+  }
+}
+
 async function getAssetById(req: FastifyRequest, res: FastifyReply) {
   try {
     const { id } = req.query as { id: string }
@@ -437,4 +481,5 @@ export {
   downloadAsset,
   getAssetByName,
   getProcessingStatus,
+  renameAsset,
 }

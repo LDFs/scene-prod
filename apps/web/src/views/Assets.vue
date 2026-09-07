@@ -44,8 +44,25 @@
           </span>
         </div>
         <div class="asset-info">
-          <div class="asset-name" :title="asset.originalName">
-            {{ asset.originalName }}
+          <!-- 重命名走行内输入。打开预览的 click 挂在卡片上，所以编辑区的交互一律 .stop -->
+          <div class="asset-name-row">
+            <input
+              v-if="editingId === asset._id"
+              :ref="setRenameInput"
+              v-model="editingName"
+              class="asset-name-input"
+              maxlength="100"
+              @click.stop
+              @keyup.enter="commitRename(asset)"
+              @keyup.esc="cancelRename"
+              @blur="cancelRename"
+            />
+            <template v-else>
+              <div class="asset-name" :title="asset.name">
+                {{ asset.name }}
+              </div>
+              <button class="rename-btn" title="重命名" @click.stop="startRename(asset)">✏️</button>
+            </template>
           </div>
           <div class="asset-meta">
             <span>{{ asset.format.toUpperCase() }}</span>
@@ -79,15 +96,32 @@
     <div class="display-dialog" v-if="showDisplay">
       <button class="close-dialog-btn" @click="closeDialog">×</button>
       <div v-if="showModel" class="dialog-canvas-container" ref="dialogCanvasContainer"></div>
-      <img v-if="showImg" class="dialog-img" ref="displayImg" src="" alt="" />
+      <!-- 加载期间保留元素（否则 @load 永远不会触发），只是先不显示 -->
+      <img
+        v-if="showImg"
+        class="dialog-img"
+        :src="displayImgSrc"
+        :style="{ visibility: dialogLoading ? 'hidden' : 'visible' }"
+        alt=""
+        @load="onDialogImgLoad"
+        @error="onDialogImgError"
+      />
+      <!-- 模型和原图都要走网络，没有反馈的话点开就是一片空白，像是没响应 -->
+      <div v-if="dialogLoading || dialogError" class="dialog-status">
+        <template v-if="dialogLoading">
+          <div class="spinner"></div>
+          <p>加载中...</p>
+        </template>
+        <p v-else class="dialog-error">{{ dialogError }}</p>
+      </div>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted, nextTick, Ref } from 'vue'
+import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
 import { AssetWithId } from '@scene-prod/shared'
-import { uploadAsset, getAssets, deleteAsset, downloadAsset, waitForProcessing } from '../services/asset'
+import { uploadAsset, getAssets, deleteAsset, downloadAsset, waitForProcessing, renameAsset } from '../services/asset'
 import { BASE_URL } from '@root/config.ts'
 import { ElMessage } from 'element-plus'
 import 'element-plus/es/components/message/style/css'
@@ -421,12 +455,68 @@ const handleDelete = async (asset: AssetWithId) => {
   }
 }
 
+/** 正在重命名的资产 id；同一时刻只允许一个，null 表示没有卡片处于编辑态 */
+const editingId = ref<string | null>(null)
+const editingName = ref('')
+/**
+ * v-for 里用字符串 ref 会收集成数组，而这里同时只存在一个输入框，
+ * 所以用函数 ref 直接拿元素。只在挂载时赋值：卸载回调传 null，
+ * 若它在新元素挂载之后才执行会把刚拿到的引用清掉。
+ */
+let renameInputEl: HTMLInputElement | null = null
+const setRenameInput = (el: unknown) => {
+  if (el) renameInputEl = el as HTMLInputElement
+}
+
+const startRename = async (asset: AssetWithId) => {
+  editingId.value = asset._id
+  editingName.value = asset.name
+  await nextTick()
+  renameInputEl?.focus()
+  renameInputEl?.select()
+}
+
+const cancelRename = () => {
+  editingId.value = null
+  editingName.value = ''
+}
+
+const commitRename = async (asset: AssetWithId) => {
+  const newName = editingName.value.trim()
+  // 先退出编辑态：回车会让输入框卸载并触发 blur，届时 cancelRename 就是空操作
+  cancelRename()
+
+  if (!newName || newName === asset.name) return
+
+  const result = await renameAsset(asset._id, newName)
+  if (!result.success) {
+    ElMessage({ message: result.message || '重命名失败', type: 'error' })
+    return
+  }
+
+  // 就地更新，不为一次改名重新拉整页列表（会丢掉当前滚动位置）
+  const target = assets.value.find((item) => item._id === asset._id)
+  if (target) {
+    target.name = result.asset?.name ?? newName
+  }
+  ElMessage({ message: '重命名成功', type: 'success' })
+}
+
 const dialogCanvasContainer = ref()
-const displayImg: Ref<HTMLElement | null> = ref(null)
+const displayImgSrc = ref('')
 const showDisplay = ref(false)
 const showModel = ref(false)
 const showImg = ref(false)
+const dialogLoading = ref(false)
+const dialogError = ref('')
 let showedModel: Object3D | Group | undefined = undefined
+/**
+ * 预览是异步的，模型可能加载几秒才回来，期间用户完全可能已经关掉弹窗或点开了别的资产。
+ * 每次打开自增一个序号，回调里比对；对不上就说明这次结果已经过期，
+ * 否则会往关掉的弹窗里塞 canvas，showedModel 也会被覆盖成再也清理不掉的模型。
+ */
+let dialogToken = 0
+
 const showAssetsDialog = (asset: AssetWithId) => {
   // 处理失败的资产没有可用产物，打开只会是一个空场景，不如直接说明原因
   if (isAssetUnusable(asset)) {
@@ -441,31 +531,63 @@ const showAssetsDialog = (asset: AssetWithId) => {
     thumbnailGenerator = new ThumbnailGenerator(100, 100)
   }
   showDisplay.value = true
-  console.log('asset:', asset)
+  dialogError.value = ''
+  const token = ++dialogToken
   const assetUrl = asset.cloudUrls?.compressed ?? ''
   if (assetUrl.endsWith('glb') || assetUrl.endsWith('gltf')) {
     showModel.value = true
+    dialogLoading.value = true
     nextTick(async () => {
-      showedModel = await thumbnailGenerator?.showDialogScene(dialogCanvasContainer.value, assetUrl)
+      try {
+        const model = await thumbnailGenerator?.showDialogScene(dialogCanvasContainer.value, assetUrl)
+        if (token !== dialogToken) {
+          // 结果已过期，但模型已经进场景了，得就地清掉，不然会一直留在渲染器里
+          if (model) thumbnailGenerator?.cleanDisplay(model)
+          return
+        }
+        showedModel = model
+      } catch (err) {
+        if (token !== dialogToken) return
+        dialogError.value = `模型加载失败：${err instanceof Error ? err.message : String(err)}`
+      } finally {
+        if (token === dialogToken) dialogLoading.value = false
+      }
     })
   } else if (['jpg', 'jpeg', 'png'].includes(asset.format)) {
     showImg.value = true
-    nextTick(() => {
-      let url = asset.cloudUrls?.file ?? ''
-      if (!url.startsWith('http')) {
-        url = 'https://' + url
-      }
-      displayImg.value?.setAttribute('src', url)
-    })
+    dialogLoading.value = true
+    let url = asset.cloudUrls?.file ?? ''
+    if (!url.startsWith('http')) {
+      url = 'https://' + url
+    }
+    displayImgSrc.value = url
+  } else {
+    // 剩下的格式没有预览分支，明说一句总好过给一个空弹窗
+    dialogError.value = `暂不支持预览 ${asset.format.toUpperCase()} 格式`
   }
 }
 
+const onDialogImgLoad = () => {
+  dialogLoading.value = false
+}
+
+const onDialogImgError = () => {
+  dialogLoading.value = false
+  dialogError.value = '图片加载失败'
+}
+
 const closeDialog = () => {
+  // 作废进行中的加载，避免它回来后往已关闭的弹窗里写东西
+  dialogToken++
   showDisplay.value = false
   showModel.value = false
   showImg.value = false
+  dialogLoading.value = false
+  dialogError.value = ''
+  displayImgSrc.value = ''
   if (showedModel) {
     thumbnailGenerator?.cleanDisplay(showedModel)
+    showedModel = undefined
   }
 }
 
@@ -699,13 +821,54 @@ onUnmounted(() => {
   padding: 12px;
 }
 
+.asset-name-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 6px;
+  /* 输入框和文字行高不同，固定高度避免进出编辑态时卡片抖动 */
+  min-height: 22px;
+}
+
 .asset-name {
+  flex: 1;
+  /* flex 子项默认 min-width:auto，不压到 0 的话长名字会把铅笔挤出卡片 */
+  min-width: 0;
   font-size: 14px;
   font-weight: 500;
-  margin-bottom: 6px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.rename-btn {
+  flex: none;
+  padding: 0 2px;
+  border: none;
+  background: transparent;
+  font-size: 13px;
+  line-height: 1;
+  cursor: pointer;
+  opacity: 0.45;
+  transition: opacity 0.2s;
+}
+
+.rename-btn:hover {
+  opacity: 1;
+}
+
+.asset-name-input {
+  flex: 1;
+  min-width: 0;
+  padding: 2px 6px;
+  font-size: 14px;
+  font-weight: 500;
+  font-family: inherit;
+  color: #fff;
+  background: #1a1a1a;
+  border: 1px solid #0066cc;
+  border-radius: 4px;
+  outline: none;
 }
 
 .asset-meta {
@@ -843,5 +1006,29 @@ onUnmounted(() => {
   left: 50%;
   top: 50%;
   transform: translate(-50%, -50%);
+}
+
+.dialog-status {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 10;
+  padding: 32px 40px;
+  border-radius: 8px;
+  background: rgba(42, 42, 42, 0.9);
+  color: #fff;
+  text-align: center;
+  /* 纯提示层，不要挡住底下画布的拖拽 */
+  pointer-events: none;
+}
+
+.dialog-status p {
+  margin: 0;
+}
+
+.dialog-error {
+  color: #ff8080;
+  max-width: 60vw;
 }
 </style>

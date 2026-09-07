@@ -69,6 +69,27 @@ export async function getAssetByName(
   }
 }
 
+export async function renameAsset(
+  id: string,
+  name: string,
+): Promise<{ success: boolean; message: string; asset?: AssetWithId }> {
+  try {
+    const response = await fetch(`${ASSET_BASE_URL}/rename`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id, name }),
+    })
+    const data = await response.json()
+    return data
+  } catch (error) {
+    console.error('重命名资产失败:', error)
+    return {
+      success: false,
+      message: '重命名资产失败',
+    }
+  }
+}
+
 export async function deleteAsset(id: string): Promise<{ success: boolean; message: string }> {
   try {
     const response = await fetch(`${ASSET_BASE_URL}/delete?id=${id}`, {
