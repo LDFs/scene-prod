@@ -1,4 +1,4 @@
-import { AssetWithId } from '@scene-prod/shared'
+import { AssetWithId, pageType } from '@scene-prod/shared'
 import { ASSET_BASE_URL, BASE_URL } from '../../config.js'
 
 export async function uploadAsset(
@@ -32,7 +32,7 @@ export async function getAssets(params: {
   type: string
   page: number
   pageSize: number
-}): Promise<{ success: boolean; message: string; assets: AssetWithId[] }> {
+}): Promise<{ success: boolean; message: string; assets: AssetWithId[]; pagination: pageType }> {
   try {
     const url = params.type
       ? `${ASSET_BASE_URL}/list?type=${params.type}&page=${params.page}&pageSize=${params.pageSize}`
@@ -46,6 +46,12 @@ export async function getAssets(params: {
       success: false,
       message: '获取资产列表失败',
       assets: [],
+      pagination: {
+        page: 0,
+        pageSize: 0,
+        total: 0,
+        totalPages: 0,
+      },
     }
   }
 }
@@ -191,7 +197,7 @@ export function getAssetUrl(asset: AssetWithId): string {
 
 export function getModelUrl(asset: AssetWithId): string {
   if (asset.cloudUrls?.compressed) {
-    if(asset.cloudUrls?.compressed.startsWith('http')) return asset.cloudUrls?.compressed
+    if (asset.cloudUrls?.compressed.startsWith('http')) return asset.cloudUrls?.compressed
     return 'https://' + asset.cloudUrls.compressed
   }
   if (asset.processingStatus === 'ready' && asset.processedFiles?.compressed) {

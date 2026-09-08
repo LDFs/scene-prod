@@ -75,3 +75,7 @@ export type Asset = {
 export type AssetWithId = Asset & {
   _id: string
 }
+
+export type pageType = {
+  page: number, pageSize: number, total: number, totalPages: number
+}
