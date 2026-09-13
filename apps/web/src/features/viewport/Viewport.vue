@@ -23,7 +23,6 @@ import { useManagerStore } from '@/stores/manager'
 import { EditorStoreAdapter } from '@/adapters/EditorStoreAdapter'
 import { HttpSceneRepository } from '@/adapters/HttpSceneRepository'
 import { useHistoryStore } from '@/stores/history'
-import { getAssetByName, getModelUrl } from '@/services/asset'
 
 const route = useRoute()
 const container = ref<HTMLDivElement | null>(null)
@@ -63,13 +62,9 @@ const onDrop = async (event: DragEvent) => {
   let descriptor: ObjectDescriptor | null = null
   if (type === 'model') {
     descriptor = { kind: 'gltf', url, name, normalizeScale }
-  } else if (type === 'obj') {
-    // 查看这个 obj 模型对应的 mtl 文件（依赖 app 的 asset 服务与 URL 拼接，保留在此处）
-    const { asset: material } = await getAssetByName('material', name)
-    if (material) {
-      material.url = getModelUrl(material)
-    }
-    descriptor = { kind: 'obj', url, name, material }
+    // 注：OBJ 资产不走单独分支。它的 type 就是 'model'（LibraryPanel 拖拽时传的
+    // 是 asset.type），流水线已经把它转成 GLB、材质也由 obj2gltf 烘进了产物，
+    // 所以这里按 gltf 加载即可，不需要再去找对应的 .mtl。
   } else if(type === 'fbx') {
     descriptor = { kind: 'fbx', url, name }
   } else if (type === 'Box' || type === 'Sphere') {

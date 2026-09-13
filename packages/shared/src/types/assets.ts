@@ -1,4 +1,5 @@
-export type AssetType = 'model' | 'texture' | 'hdri' | 'effect' | 'tileset'
+
+export type AssetType = 'model' | 'texture' | 'effect' | 'tileset' | 'material'
 
 export type ProcessingStatus = 'pending' | 'processing' | 'ready' | 'failed' | 'skipped'
 
@@ -19,6 +20,14 @@ export type Asset = {
   // 流水线处理
   processingStatus?: ProcessingStatus
   processingError?: string
+  /**
+   * 处理成功（status 为 ready）但有非致命问题时的说明，多条以「；」连接。
+   * 例：ZIP 内有多个模型只用了其中一个、OBJ 缺 .mtl 已回落默认材质、
+   * 修复了无效顶点值、部分产物未同步到云存储。
+   *
+   * 与 processingError 分开：那个字段代表"资产不可用"，这个代表"能用但有瑕疵"。
+   */
+  processingWarning?: string
   processedFiles?: {
     compressed?: string
     lod0?: string

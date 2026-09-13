@@ -3,6 +3,7 @@ import { promisify } from 'util'
 import path from 'path'
 import fs from 'fs'
 import { ProcessAssetType } from '../type'
+import { repairObjForConversion } from '../utils/objRepair'
 
 const execAsync = promisify(exec)
 const __dirname = path.resolve()
@@ -35,7 +36,29 @@ export async function formatConvert(context: ProcessAssetType) {
     fs.mkdirSync(absoluteOutputDir, { recursive: true })
   }
 
+  // OBJ 有两类会静默失败的问题（nan 顶点值、mtllib 扩展名大小写），转换前先在
+  // 副本上修掉，原文件不动。详见 objRepair。
+  let cleanupPaths: string[] = []
+
   try {
+    let conversionInputPath = absoluteInputPath
+
+    if (ext === '.obj') {
+      const repair = await repairObjForConversion(absoluteInputPath)
+      conversionInputPath = repair.inputPath
+      cleanupPaths = repair.cleanupPaths
+
+      if (repair.fixedCount > 0) {
+        context.warnings.push(
+          `模型有 ${repair.fixedCount} 处顶点/UV 数据是无效值（nan/inf），已置零处理。` +
+            `这部分区域的贴图坐标可能不正确，建议在建模软件里重新导出`,
+        )
+      }
+      if (repair.normalizedMtls.length > 0) {
+        console.log(`[FormatConverter] 已修正材质库扩展名大小写: ${repair.normalizedMtls.join('、')}`)
+      }
+    }
+
     if (ext === '.fbx') {
       // 检查本地 bin 目录是否有 FBX2glTF
       const localBin = path.join(process.cwd(), 'bin', 'FBX2glTF.exe');
@@ -52,9 +75,10 @@ export async function formatConvert(context: ProcessAssetType) {
       if (stdout) console.log('[FormatConverter] stdout:', stdout);
       if (stderr) console.log('[FormatConverter] stderr:', stderr);
     } else if (ext === '.obj') {
-      // OBJ 转换 - 需要 obj2gltf
+      // OBJ 转换 - 需要 obj2gltf。输入用可能被修复过的副本，输出名仍取原始
+      // baseName，不让 ".__repaired" 污染资产名
       console.log('[FormatConverter] 使用 obj2gltf 转换 OBJ')
-      await execAsync(`npx obj2gltf -i "${absoluteInputPath}" -o "${absoluteOutputPath}"`)
+      await execAsync(`npx obj2gltf -i "${conversionInputPath}" -o "${absoluteOutputPath}"`)
     } else if (ext === '.stl') {
       // STL 转换 - 使用 gltf-transform 或其他工具
       console.log('[FormatConverter] STL 转换暂不支持，请使用 GLB 格式')
@@ -74,5 +98,15 @@ export async function formatConvert(context: ProcessAssetType) {
     if (error.stdout) console.log('stdout:', error.stdout)
     if (error.stderr) console.log('stderr:', error.stderr)
     throw error
+  } finally {
+    // 修复产生的临时文件只服务于这一次转换。直传 .obj 时它们落在 uploads/models/
+    // 下，不在 pipeline 的 tempDir 清理范围内，必须自己删
+    for (const tempPath of cleanupPaths) {
+      try {
+        fs.rmSync(tempPath, { force: true })
+      } catch (cleanupError: any) {
+        console.warn('[FormatConverter] 清理临时文件失败:', cleanupError.message)
+      }
+    }
   }
 }

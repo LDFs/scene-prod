@@ -122,7 +122,9 @@ export async function downloadAsset(id: string, filename: string) {
   document.body.removeChild(link)
 }
 
-export async function getProcessingStatus(id: string): Promise<{ success: boolean; message: string; status: string }> {
+export async function getProcessingStatus(
+  id: string,
+): Promise<{ success: boolean; message: string; status: string; warning?: string }> {
   try {
     const response = await fetch(`${ASSET_BASE_URL}/processing-status?id=${id}`)
     const data = await response.json()
@@ -142,6 +144,12 @@ export type ProcessingOutcome = {
   ok: boolean
   status: 'ready' | 'failed' | 'skipped' | 'timeout' | 'unknown'
   message: string
+  /**
+   * 处理成功但有非致命问题时的说明（ZIP 内多模型只用了一个、OBJ 缺 .mtl 已回落
+   * 默认材质、修复了无效顶点值、部分产物未同步到云存储……）。
+   * 资产可用，但用户需要知道结果与预期有出入。
+   */
+  warning?: string
 }
 
 /**
@@ -165,10 +173,10 @@ export async function waitForProcessing(
     const result = await getProcessingStatus(id)
 
     if (result.status === 'ready') {
-      return { ok: true, status: 'ready', message: result.message }
+      return { ok: true, status: 'ready', message: result.message, warning: result.warning }
     }
     if (result.status === 'skipped') {
-      return { ok: true, status: 'skipped', message: result.message }
+      return { ok: true, status: 'skipped', message: result.message, warning: result.warning }
     }
     if (result.status === 'failed') {
       return { ok: false, status: 'failed', message: result.message }

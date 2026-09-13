@@ -17,7 +17,7 @@ const AssetSchema = new mongoose.Schema<Asset>({
   type: {
     type: String,
     required: true,
-    enum: ['model', 'texture', 'hdri', 'effect', 'tileset', 'material'], // 资产类型 (新增 tileset)
+    enum: ['model', 'texture', 'effect', 'tileset', 'material'], // 资产类型
     default: 'model'
   },
   format: {
@@ -60,6 +60,12 @@ const AssetSchema = new mongoose.Schema<Asset>({
   },
   processingError: {
     type: String // 处理失败时的错误信息
+  },
+  processingWarning: {
+    // 处理成功但有非致命问题时的说明：ZIP 内多模型只用了一个、OBJ 缺 MTL 已回落
+    // 默认材质、修复了 nan 顶点值等。与 processingError 分开，避免"能用但有瑕疵"
+    // 和"彻底失败"混在一个字段里
+    type: String
   },
 
   // 处理后的输出文件 (本地相对路径)

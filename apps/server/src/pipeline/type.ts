@@ -43,4 +43,10 @@ export type ProcessAssetType = {
   lods: Array<string> | null,
   tempDir: string,
   originalFormat: string
+  /**
+   * 非致命问题的收集处：ZIP 内有多个模型只用了其中一个、OBJ 缺 MTL 已回落默认
+   * 材质、修复了非有限顶点值……这些都不该让处理失败，但用户必须知道。
+   * 最终汇总写入 asset.processingWarning 回传前端。
+   */
+  warnings: string[]
 }

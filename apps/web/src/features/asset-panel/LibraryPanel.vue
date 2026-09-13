@@ -2,6 +2,15 @@
   <div class="library-panel">
     <h3>资源库</h3>
 
+    <!-- 三个分区共用，accept 随点击的入口切换 -->
+    <input ref="fileInput" type="file" multiple :accept="uploadAccept" @change="handleFileSelect" hidden />
+
+    <!-- 上传是异步的且可能要打包，没有进度提示的话点完按钮像是没反应 -->
+    <div v-if="uploading" class="upload-status" :title="uploadStatus">
+      <span class="upload-spinner"></span>
+      <span class="upload-status-text">{{ uploadStatus }}</span>
+    </div>
+
     <!-- 几何体部分 -->
     <div class="section">
       <h4>几何体</h4>
@@ -13,7 +22,14 @@
     <div class="section">
       <div class="section-header">
         <h4>模型</h4>
-        <button class="refresh-btn" @click="loadAssets()" title="刷新">🔄</button>
+        <button
+          class="upload-btn"
+          :disabled="uploading"
+          @click="triggerUpload(MODEL_UPLOAD_ACCEPT)"
+          title="上传模型（.gltf 需连同 .bin 与贴图一起选中）"
+        >
+          📤
+        </button>
       </div>
 
       <div v-if="loading" class="loading">加载中...</div>
@@ -50,6 +66,9 @@
     <div class="section" id="env-section">
       <div class="section-header">
         <h4>贴图</h4>
+        <button class="upload-btn" :disabled="uploading" @click="triggerUpload(TEXTURE_UPLOAD_ACCEPT)" title="上传贴图">
+          📤
+        </button>
       </div>
 
       <div v-if="loading" class="loading">加载中...</div>
@@ -79,9 +98,9 @@
 
     <!-- 3D Tiles 部分 -->
     <div class="section">
+      <!-- 3D Tiles 暂无上传入口：服务端只按 .tileset 扩展名归类，上传链路还没打通 -->
       <div class="section-header">
         <h4>3D Tiles</h4>
-        <button class="refresh-btn" @click="loadAssets()" title="刷新">🔄</button>
       </div>
 
       <div v-if="loading" class="loading">加载中...</div>
@@ -112,9 +131,21 @@
 </template>
 
 <script setup lang="ts">
+
+/**
+注意的点：
+1. 加载模型资源时，判断列表中是否有正在处理的模型(state为pending)，有的话就轮询获取新的数据
+2. 滚动懒加载，这里有三种资源列表，每块区域分别做懒加载，就通过一个函数来做统一的处理，为每块区域创建各自的处理逻辑，使用到了 资源列表、当前页数、总页数、每页数量、
+监听对象、加载状态。懒加载主要通过 ObserverIntersection 来监听 区域最末尾的一个空元素 距离该区域的底部的位置，设置一个阈值，如果他们的距离小于这个阈值的话，就继续
+加载新一页的数据
+3. 拖拽模型进入场景，在 event.transferData 中记录被拖拽的模型的信息，有：url、名称、归一化大小
+ */
+
+
 import { ref, computed, watch, nextTick, onMounted, onUnmounted } from 'vue'
 import { getAssets, getModelUrl } from '@/services/asset'
 import { AssetWithId } from '@scene-prod/shared'
+import { useAssetUpload, MODEL_UPLOAD_ACCEPT, TEXTURE_UPLOAD_ACCEPT } from '@/composables/useAssetUpload'
 
 /**
  * 每页条数。首屏和滚动追加必须用同一个值，
@@ -134,7 +165,7 @@ const LOAD_AHEAD = 80
 /**
  * 一个可滚动加载的资源分区。三类资源逻辑完全一样，只有 type 不同。
  */
-function createSection(type: 'model' | 'texture' | 'tileset') {
+function createSection(type: string) {
   const items = ref<AssetWithId[]>([])
   const containerRef = ref<HTMLElement>()
   const sentinelRef = ref<HTMLElement>()
@@ -237,12 +268,34 @@ function createSection(type: 'model' | 'texture' | 'tileset') {
     fill()
   }
 
+  /**
+   * 把刚上传的资源插到列表头部。
+   *
+   * 后端按 createdAt 逆序返回，新资源天然落在整条流的最前面，本地前插与服务端顺序一致。
+   * 代价是后续分页的 offset 相对整条流后移了 prepend 的条数，紧接着几页会带回
+   * 已在列表里的条目——由 loadMore 里的 _id 去重兜住：不会重复，也不会漏项
+   * （覆盖区间仍然连续），下一次轮询 refresh 会把这个偏移彻底抹平。
+   */
+  const prepend = async (assets: AssetWithId[]) => {
+    // 首屏还没成功加载过，没有可对齐的分页基准；直接重新拉一次，
+    // 新资源本来就在第一页，硬前插只会让后续 offset 算错。
+    if (loadedPages.value === 0) {
+      await refresh()
+      return
+    }
+    const seen = new Set(items.value.map((a) => a._id))
+    const fresh = assets.filter((a) => !seen.has(a._id))
+    if (fresh.length === 0) return
+    items.value.unshift(...fresh)
+    total.value += fresh.length
+  }
+
   const dispose = () => {
     io?.disconnect()
     io = null
   }
 
-  return { items, containerRef, sentinelRef, loadingMore, loadFailed, hasMore, refresh, retry, dispose }
+  return { items, containerRef, sentinelRef, loadingMore, loadFailed, hasMore, refresh, retry, prepend, dispose }
 }
 
 const {
@@ -254,6 +307,7 @@ const {
   hasMore: modelHasMore,
   refresh: refreshModels,
   retry: retryModels,
+  prepend: prependModels,
   dispose: disposeModels,
 } = createSection('model')
 
@@ -266,6 +320,7 @@ const {
   hasMore: textureHasMore,
   refresh: refreshTextures,
   retry: retryTextures,
+  prepend: prependTextures,
   dispose: disposeTextures,
 } = createSection('texture')
 
@@ -293,11 +348,7 @@ const loadAssets = async (silent = false) => {
   } finally {
     if (!silent) loading.value = false
     // 根据最新数据决定是否需要继续轮询
-    if (hasPendingModels()) {
-      startPolling()
-    } else {
-      stopPolling()
-    }
+    syncPolling()
     // 通知外部资源加载完成（用于新手引导等）
     window.dispatchEvent(new CustomEvent('library-loaded'))
   }
@@ -324,6 +375,75 @@ const stopPolling = () => {
     clearInterval(pollTimer)
     pollTimer = null
   }
+}
+
+/** 按当前列表里是否还有待处理的模型，决定开或停轮询。列表内容变动后都要调一次 */
+const syncPolling = () => {
+  if (hasPendingModels()) {
+    startPolling()
+  } else {
+    stopPolling()
+  }
+}
+
+// —— 上传 —— //
+
+/**
+ * 三个分区共用一个隐藏的文件选择框，只有 accept 随入口变化；
+ * 上传结果按资产实际 type 分发回对应分区，所以在模型入口里连带选中的贴图
+ * 也会落到贴图列表，不会串到模型列表里。
+ *
+ * 3D Tiles 没有对应的上传链路（服务端只认 .tileset 扩展名注册），暂不提供入口。
+ */
+const { uploading, uploadStatus, uploadFiles } = useAssetUpload()
+
+const uploadAccept = ref(MODEL_UPLOAD_ACCEPT)
+const fileInput = ref<HTMLInputElement | null>(null)
+
+const triggerUpload = async (accept: string) => {
+  if (uploading.value) return
+  uploadAccept.value = accept
+  // accept 是绑定上去的，得等 DOM 更新完再打开，否则用的还是上一个入口的过滤条件
+  await nextTick()
+  fileInput.value?.click()
+}
+
+const handleFileSelect = async (event: Event) => {
+  const input = event.target as HTMLInputElement
+  if (!input.files || input.files.length === 0) return
+  const files = Array.from(input.files)
+  // 清空 value，否则连续选同一批文件不会再触发 change
+  input.value = ''
+  // reportProcessing: false —— 面板本来就有状态角标 + 轮询，
+  // 没必要把上传态一直挂到流水线跑完（大模型可达数分钟）
+  await uploadFiles(files, { onUploaded: prependUploaded, reportProcessing: false })
+}
+
+/**
+ * 各类资产对应的分区前插函数。.hdr 已并入 texture，所以环境贴图也走贴图分区。
+ * 没有列出的类型（material 等）在面板里没有分区，不处理。
+ */
+const PREPEND_BY_TYPE: Record<string, (assets: AssetWithId[]) => Promise<void>> = {
+  model: prependModels,
+  texture: prependTextures,
+}
+
+const prependUploaded = async (uploaded: AssetWithId[]) => {
+  // 按目标分区（而不是 type）归组：多个 type 映射到同一分区时，
+  // 按 type 分会对它调用两次 unshift，把同一批文件的先后顺序打乱
+  const grouped = new Map<(assets: AssetWithId[]) => Promise<void>, AssetWithId[]>()
+  for (const asset of uploaded) {
+    const prepend = PREPEND_BY_TYPE[asset.type]
+    if (!prepend) continue
+    const list = grouped.get(prepend)
+    if (list) list.push(asset)
+    else grouped.set(prepend, [asset])
+  }
+  for (const [prepend, assets] of grouped) {
+    await prepend(assets)
+  }
+  // 新上传的模型是 pending 状态，得把轮询接上，否则角标会一直停在"处理中…"
+  syncPolling()
 }
 
 const onDragGeo = (event: DragEvent, type: string) => {
@@ -436,18 +556,62 @@ h4 {
   font-weight: normal;
 }
 
-.refresh-btn {
+.upload-btn {
+  flex: none;
   background: transparent;
   border: none;
   color: #888;
   cursor: pointer;
   font-size: 14px;
+  line-height: 1;
   padding: 2px;
-  transition: color 0.2s;
+  opacity: 0.6;
+  transition: opacity 0.2s;
 }
 
-.refresh-btn:hover {
-  color: white;
+.upload-btn:hover:not(:disabled) {
+  opacity: 1;
+}
+
+.upload-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.25;
+}
+
+.upload-status {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 12px;
+  padding: 6px 8px;
+  border-radius: 4px;
+  background: #2a2a2a;
+  font-size: 11px;
+  color: #aaa;
+}
+
+.upload-status-text {
+  /* 文件名可能很长，压到一行，完整内容留在 title 里 */
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.upload-spinner {
+  flex: none;
+  width: 12px;
+  height: 12px;
+  border: 2px solid #444;
+  border-top-color: #0066cc;
+  border-radius: 50%;
+  animation: library-spin 0.8s linear infinite;
+}
+
+@keyframes library-spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .item {

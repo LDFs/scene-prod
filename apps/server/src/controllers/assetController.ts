@@ -96,11 +96,11 @@ async function uploadAsset(req: FastifyRequest, res: FastifyReply) {
     }
 
     let assetType = 'model'
-    if (['.jpg', '.jpeg', '.png', '.webp'].includes(ext)) {
+    // .hdr 也归到 texture：它和普通贴图在上传、存储、流水线上的处理完全一致，
+    // 真正需要区分的只有加载器（HDRLoader vs TextureLoader），而那看的是 format
+    if (['.jpg', '.jpeg', '.png', '.webp', '.hdr', '.exr'].includes(ext)) {
       assetType = 'texture'
-    } else if (['.hdr'].includes(ext)) {
-      assetType = 'hdri'
-    } else if (['.gltf', '.glb', '.zip', 'obj'].includes(ext)) {
+    } else if (['.gltf', '.glb', '.zip', '.obj', '.fbx'].includes(ext)) {
       assetType = 'model'
     } else if (['.mtl'].includes(ext)) {
       assetType = 'material'
@@ -144,8 +144,8 @@ async function uploadAsset(req: FastifyRequest, res: FastifyReply) {
         warnings.push(`缩略图上传云存储失败: ${message}`)
       }
     }
-    // HDRI 和贴图文件上传到云存储, 在数据库中存储对应的url
-    if (assetType === 'hdri' || assetType === 'texture') {
+    // 贴图文件（含 .hdr 环境贴图）上传到云存储, 在数据库中存储对应的url
+    if (assetType === 'texture') {
       const remotePath = `/assets/${assetType}/${asset._id.toString()}${ext}`
       try {
         const res = await uploadFileWithRetry(savePath, remotePath)
@@ -190,7 +190,7 @@ async function getAssets(req: FastifyRequest, res: FastifyReply) {
 
     const filter: any = {}
     if (type) {
-      filter.type = type as AssetType
+      filter.type = type
     }
 
     const total = await AssetModel.countDocuments(filter)
@@ -300,7 +300,9 @@ async function getProcessingStatus(req: FastifyRequest, res: FastifyReply) {
       return res.status(400).send({ success: false, message: '缺少参数 id', status: 'unknown' })
     }
 
-    const asset = await AssetModel.findById(id).select('processingStatus processingError name').lean()
+    const asset = await AssetModel.findById(id)
+      .select('processingStatus processingError processingWarning name')
+      .lean()
     if (!asset) {
       return res.status(404).send({ success: false, message: '资产不存在', status: 'unknown' })
     }
@@ -311,6 +313,9 @@ async function getProcessingStatus(req: FastifyRequest, res: FastifyReply) {
       status,
       // 前端直接展示这条，所以过滤掉纯内部细节
       message: status === 'failed' ? toUserFacingError(asset.processingError) : '获取处理状态成功',
+      // 处理成功但有瑕疵时的说明。这些原文都是前置检查/流水线主动写的面向用户文案，
+      // 不像 processingError 那样可能混进第三方库的内部细节，可以直接透出
+      ...(asset.processingWarning ? { warning: asset.processingWarning } : {}),
     })
   } catch (error) {
     req.log.error(error)

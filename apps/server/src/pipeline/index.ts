@@ -1,6 +1,7 @@
 import { AssetModel } from '../models/assetModel'
 import { assetQueue } from './queue'
 import fs from 'fs'
+import path from 'path'
 import { publishToCloud } from './utils/publishToCloud'
 
 import { calculateBounds } from './processors/boundsCalculator'
@@ -12,7 +13,8 @@ import { extractZip } from './processors/zipExtractor'
 import { sanitize } from './processors/sanitizer'
 import { optimizeSceneGraph } from './processors/optimizeSceneGraph'
 import { computeSizing } from './utils/sizing'
-import { findMissingGltfDeps } from './utils/gltfDeps'
+import { resolveGltfDeps } from './utils/gltfDeps'
+import { inspectObjDeps, describeObjDepIssues } from './utils/objDeps'
 import { AssetWithId } from '@scene-prod/shared'
 import { ProcessAssetType } from './type'
 
@@ -29,6 +31,7 @@ async function processAsset(asset: AssetWithId) {
     textures: {},
     tempDir: '',
     originalFormat: asset.format,
+    warnings: [],
   }
   console.log(`[Pipeline] 开始处理资产: ${asset.name} (${asset._id})`)
 
@@ -39,11 +42,29 @@ async function processAsset(asset: AssetWithId) {
   }
 
   // Step 0.5: 依赖完整性检查
-  // .gltf 引用的 .bin / 贴图必须都在。缺失时立刻失败并说明缺什么，
+  // .gltf 引用的 .bin 必须在：缺了产物是个空模型，立刻失败并说明缺什么，
   // 否则错误会一路拖到 Draco 读取甚至前端加载场景时才暴露。
-  const missingDeps = findMissingGltfDeps(context.inputPath)
-  if (missingDeps.length > 0) {
-    throw new Error(`模型缺少 ${missingDeps.length} 个依赖资源: ${missingDeps.join('、')}`)
+  // 缺贴图则和 .obj 缺 .mtl 同等对待——resolveGltfDeps 已就地摘掉引用，只警告。
+  const gltfDeps = resolveGltfDeps(context.inputPath)
+  if (gltfDeps.missingBuffers.length > 0) {
+    throw new Error(`模型缺少 ${gltfDeps.missingBuffers.length} 个几何数据文件: ${gltfDeps.missingBuffers.join('、')}`)
+  }
+  if (gltfDeps.droppedImages.length > 0) {
+    const warning =
+      `模型引用的 ${gltfDeps.droppedImages.length} 个贴图未随模型提供` +
+      `（${gltfDeps.droppedImages.join('、')}），已按无贴图导入`
+    console.warn(`[Pipeline] ${warning}`)
+    context.warnings.push(warning)
+  }
+
+  // .obj 的依赖检查刻意只警告不失败：缺 .mtl/贴图时 obj2gltf 会回落到默认材质，
+  // 产物是个能用的无材质模型，判失败反而更糟。
+  if (path.extname(context.inputPath).toLowerCase() === '.obj') {
+    const objWarnings = describeObjDepIssues(await inspectObjDeps(context.inputPath))
+    if (objWarnings.length > 0) {
+      objWarnings.forEach((warning) => console.warn(`[Pipeline] OBJ 依赖问题: ${warning}`))
+      context.warnings.push(...objWarnings)
+    }
   }
 
   // Step 1: 格式转换 (OBJ/FBX/STL → GLB)
@@ -122,11 +143,25 @@ assetQueue.process('process', async (job) => {
       console.log(`[Pipeline] 尺寸归一化: ×${sizing.normalizeScale} (猜测单位 ${sizing.unitGuess})`)
     }
 
+    // 流水线途中收集的非致命问题（ZIP 多模型取舍、OBJ 缺 MTL、修复了无效顶点值）
+    // 加上非致命的云存储上传失败，汇总成一条警告。
+    //
+    // 这些此前全被吞掉：uploadWarning 写进 processingError，但 getProcessingStatus
+    // 只在 status === 'failed' 时返回 message，ready 的警告永远到不了前端。
+    const warnings = [...context.warnings]
+    if (uploadWarning && !cloud.fatal) warnings.push(uploadWarning)
+    const processingWarning = warnings.length > 0 ? warnings.join('；') : null
+    if (processingWarning) {
+      console.warn(`[Pipeline] 处理完成但有警告 (assetId=${assetId}): ${processingWarning}`)
+    }
+
     // 先落库：本地处理成果和已成功的云端地址不因个别上传失败而丢弃
     await AssetModel.findByIdAndUpdate(assetId, {
       // compressed 是资产本体，它上传失败则整单判失败，交给队列重试
       processingStatus: cloud.fatal ? 'failed' : 'ready',
-      processingError: uploadWarning,
+      // processingError 只留给真正的失败，警告走 processingWarning
+      processingError: cloud.fatal ? uploadWarning : null,
+      processingWarning,
       processedFiles: {
         compressed: '/' + context.compressedPath.replace(/\\/g, '/').replace(/^\/+/, ''),
         lod0: context.lods ? context.lods[0] : null,

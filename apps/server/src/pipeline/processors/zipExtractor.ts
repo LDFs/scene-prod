@@ -86,18 +86,29 @@ async function extractZip(context: ProcessAssetType) {
 
     // 查找模型文件
     const files = getAllFiles(outputDir)
-    const modelFile = findMainModel(files)
+    const { chosen, ignored } = findMainModel(files)
 
-    if (!modelFile) {
+    if (!chosen) {
       throw new Error('ZIP 包中未找到支持的模型文件 (.gltf, .glb, .obj, .fbx, .stl)')
     }
 
-    console.log(`[ZipExtractor] 找到主模型: ${modelFile}`)
+    console.log(`[ZipExtractor] 找到主模型: ${chosen}`)
+
+    // 一个资产只对应一个模型，多出来的必须明确告知——此前是静默丢弃，
+    // 用户既不知道少了东西，也不知道用的到底是哪一个
+    if (ignored.length > 0) {
+      const label = (p: string) => path.relative(outputDir, p).replace(/\\/g, '/')
+      console.warn(`[ZipExtractor] 压缩包内有 ${ignored.length + 1} 个模型，已忽略: ${ignored.map(label).join(', ')}`)
+      context.warnings.push(
+        `压缩包内发现 ${ignored.length + 1} 个模型，已使用「${label(chosen)}」，` +
+          `忽略「${ignored.map(label).join('」「')}」。如需分别导入请拆分压缩包`,
+      )
+    }
 
     // 记录临时目录以便后续清理
     context.tempDir = outputDir
 
-    return modelFile
+    return chosen
   } catch (error: any) {
     console.error('[ZipExtractor] 解压失败:', error.message)
     throw error
@@ -123,27 +134,52 @@ function getAllFiles(dirPath: string, arrayOfFiles: Array<string> = []) {
   return arrayOfFiles
 }
 
+/** 取文件大小，读不到时当 0，不要让排序因为一个坏文件整体抛错 */
+function sizeOf(file: string): number {
+  try {
+    return fs.statSync(file).size
+  } catch {
+    return 0
+  }
+}
+
 /**
- * 查找主模型文件
- * 优先顺序: gltf > glb > fbx > obj > stl
+ * 查找主模型文件。
+ *
+ * 排序规则必须是**确定性**的：此前只按扩展名优先级排，同扩展名之间的先后完全
+ * 取决于 readdirSync 的返回顺序，于是"两个 obj 选哪个"是随机的——真实案例里就
+ * 因此选中了坏的那个、丢掉了能正常转换的那个。
+ *
+ * 规则：扩展名优先级 → 文件体积降序 → 路径升序
+ *   - 扩展名优先：gltf/glb 无需转换，最可靠
+ *   - 体积降序：同一模型的多种格式导出里，大的那个通常细节更全
+ *     （样本：25.9MB/131k 顶点带 UV 优于 7MB/69k 顶点无 UV）
+ *   - 路径升序：兜底，保证完全可复现
+ *
+ * @returns chosen 为选中的模型，ignored 为同包内其余模型（需要告知用户）
  */
-function findMainModel(files: string[]) {
+function findMainModel(files: string[]): { chosen: string | null; ignored: string[] } {
   // 过滤出支持的文件
   const candidates = files.filter((file) => {
     const ext = path.extname(file).toLowerCase()
     return SUPPORTED_EXTENSIONS.includes(ext) && !file.includes('__MACOSX')
   })
 
-  if (candidates.length === 0) return null
+  if (candidates.length === 0) return { chosen: null, ignored: [] }
 
-  // 按优先级排序
   candidates.sort((a, b) => {
     const extA = path.extname(a).toLowerCase()
     const extB = path.extname(b).toLowerCase()
-    return SUPPORTED_EXTENSIONS.indexOf(extA) - SUPPORTED_EXTENSIONS.indexOf(extB)
+    const byExt = SUPPORTED_EXTENSIONS.indexOf(extA) - SUPPORTED_EXTENSIONS.indexOf(extB)
+    if (byExt !== 0) return byExt
+
+    const bySize = sizeOf(b) - sizeOf(a)
+    if (bySize !== 0) return bySize
+
+    return a.localeCompare(b)
   })
 
-  return candidates[0]
+  return { chosen: candidates[0], ignored: candidates.slice(1) }
 }
 
 export { extractZip }

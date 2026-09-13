@@ -105,26 +105,58 @@ export class ThumbnailGenerator {
     return this.renderToBlob(() => this.loadModel(url), [url])
   }
 
-  /** OBJ（可选 MTL）缩略图 */
-  async generateWithObj(objFile: File, mtlFile: File | null): Promise<Blob | null> {
+  /**
+   * OBJ（可选 MTL + 贴图）缩略图。
+   *
+   * mtlFile 应当是 OBJ 里 `mtllib` 真正声明的那个——按"去掉扩展名后同名"去猜会
+   * 出错，现实里 `Foo Bar 2.obj` 完全可能声明 `mtllib foo bar 2.mtl`。
+   *
+   * textureFiles 是 MTL 里 `map_*` 引用的贴图。不传的话贴图一定加载不出来：
+   * MTL 是通过 `blob:` URL 加载的，里面的相对路径没有可用的 base URL 去解析，
+   * 请求会直接失败。所以这里用 LoadingManager 的 URL 改写把"贴图文件名"映射到
+   * 各自的 blob URL。
+   */
+  async generateWithObj(objFile: File, mtlFile: File | null, textureFiles: File[] = []): Promise<Blob | null> {
     const url = URL.createObjectURL(objFile)
     const urls = [url]
+
+    // 贴图名 → blob URL。大小写不敏感，与依赖扫描侧保持一致
+    const textureUrls = new Map<string, string>()
+    for (const file of textureFiles) {
+      const blobUrl = URL.createObjectURL(file)
+      urls.push(blobUrl)
+      textureUrls.set(file.name.toLowerCase(), blobUrl)
+    }
+
+    const manager = new THREE.LoadingManager()
+    manager.setURLModifier((requested) => {
+      // data: 已经自包含，而且 payload 可能很长，不必解析
+      if (requested.startsWith('data:')) return requested
+
+      // 注意不能因为 requested 是 blob: 就跳过：MTLLoader 会把贴图相对路径拼到
+      // MTL 自己的 blob base 后面，得到 "blob:http://host/wood.png" 这种四不像，
+      // 正是这里要改写的目标。只按文件名匹配，命中就替换、没命中就原样放过
+      // （我们自己的 blob URL 末段是 uuid，不会误命中）
+      const name = requested.replace(/\\/g, '/').split('/').pop()?.toLowerCase() ?? ''
+      return textureUrls.get(name) ?? requested
+    })
+
     return this.renderToBlob(() => {
       if (mtlFile) {
         const mtlUrl = URL.createObjectURL(mtlFile)
         urls.push(mtlUrl)
         return new Promise<THREE.Object3D>((resolve, reject) => {
-          const mtlLoader = new MTLLoader()
+          const mtlLoader = new MTLLoader(manager)
           mtlLoader.load(mtlUrl, (materials) => {
             materials.preload()
-            const objLoader = new OBJLoader()
+            const objLoader = new OBJLoader(manager)
             objLoader.setMaterials(materials)
             objLoader.load(url, resolve, undefined, reject)
           }, undefined, reject)
         })
       }
       return new Promise<THREE.Object3D>((resolve, reject) => {
-        new OBJLoader().load(url, resolve, undefined, reject)
+        new OBJLoader(manager).load(url, resolve, undefined, reject)
       })
     }, urls)
   }
