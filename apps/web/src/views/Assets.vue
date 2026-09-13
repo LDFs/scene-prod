@@ -20,16 +20,39 @@
     </div>
 
     <div class="filter-bar">
-      <button :class="['filter-btn', { active: currentFilter === null }]" @click="setFilter(null)">全部</button>
-      <button :class="['filter-btn', { active: currentFilter === 'model' }]" @click="setFilter('model')">模型</button>
-      <button :class="['filter-btn', { active: currentFilter === 'texture' }]" @click="setFilter('texture')">
-        贴图
-      </button>
+      <div class="filter-group">
+        <button :class="['filter-btn', { active: currentFilter === null }]" @click="setFilter(null)">全部</button>
+        <button :class="['filter-btn', { active: currentFilter === 'model' }]" @click="setFilter('model')">模型</button>
+        <button :class="['filter-btn', { active: currentFilter === 'texture' }]" @click="setFilter('texture')">
+          贴图
+        </button>
+      </div>
+
+      <!--
+        分页交给服务端：类型筛选和页码一起发给 /list，列表直接渲染返回结果。
+        只监听 current-change / size-change（用户交互与组件自身的页码收敛才会触发），
+        不用 change——后者在父组件改写 v-model 时也会触发，会多发一次请求。
+        页长下拉不 teleport，这样它能继承下面那组深色 CSS 变量。
+      -->
+      <el-pagination
+        class="asset-pagination"
+        background
+        :teleported="false"
+        :total="total"
+        :page-sizes="[12, 20, 40, 80]"
+        :pager-count="5"
+        :disabled="loading"
+        layout="total, sizes, prev, pager, next"
+        v-model:current-page="currentPage"
+        v-model:page-size="pageSize"
+        @current-change="loadAssets"
+        @size-change="handleSizeChange"
+      />
     </div>
 
     <div class="assets-grid" v-if="assets.length > 0">
       <div
-        v-for="asset in filteredAssets"
+        v-for="asset in assets"
         :key="asset._id"
         :class="['asset-card', { 'asset-card-unusable': isAssetUnusable(asset) }]"
         @click="() => showAssetsDialog(asset)"
@@ -118,12 +141,13 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, nextTick } from 'vue'
+import { ref, onMounted, nextTick } from 'vue'
 import { AssetWithId } from '@scene-prod/shared'
 import { getAssets, deleteAsset, downloadAsset, renameAsset } from '../services/asset'
 import { BASE_URL } from '@root/config.ts'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElPagination } from 'element-plus'
 import 'element-plus/es/components/message/style/css'
+import 'element-plus/es/components/pagination/style/css'
 import { Group, Object3D } from 'three'
 import { useAssetUpload } from '../composables/useAssetUpload'
 
@@ -135,12 +159,11 @@ const folderInput = ref<HTMLInputElement | null>(null)
 // 上传流程（依赖扫描、打包、缩略图、串行上传、处理结果汇报）与资源库面板共用
 const { uploading, uploadStatus, uploadFiles, getThumbnailGenerator } = useAssetUpload()
 
-const filteredAssets = computed(() => {
-  if (currentFilter.value === null) {
-    return assets.value
-  }
-  return assets.value.filter((asset) => asset.type === currentFilter.value)
-})
+/** 分页状态。类型筛选和分页都由服务端完成，所以列表直接渲染 assets，不再在前端二次过滤 */
+const currentPage = ref(1)
+const pageSize = ref(20)
+const total = ref(0)
+const loading = ref(false)
 
 const triggerFileInput = () => {
   fileInput.value?.click()
@@ -151,8 +174,19 @@ const triggerFolderInput = () => {
 }
 
 const setFilter = (filter: string | null) => {
+  if (filter === currentFilter.value) return
   currentFilter.value = filter
+  // 换了类型，原来的页码在新结果里没有对应关系，回到第一页
+  currentPage.value = 1
+  loadAssets()
 }
+
+const handleSizeChange = () => {
+  // 每页条数变了，原页码指向的区间已经不同，从头看起
+  currentPage.value = 1
+  loadAssets()
+}
+
 const handleFileSelect = async (event: Event) => {
   const input = event.target as HTMLInputElement
   if (!input.files || input.files.length === 0) return
@@ -161,25 +195,52 @@ const handleFileSelect = async (event: Event) => {
   input.value = ''
   // 整页列表没有局部更新的必要，上传完和处理完各刷一次即可
   await uploadFiles(files, {
-    onUploaded: () => loadAssets(),
+    onUploaded: () => {
+      // 列表按创建时间倒序，新资产只会出现在第一页
+      currentPage.value = 1
+      return loadAssets()
+    },
     onProcessed: () => loadAssets(),
   })
 }
 
+/**
+ * 翻页可能连点，先发的请求不保证先回。每次请求自增一个序号，回来时比对，
+ * 对不上就丢弃——否则旧页的数据会盖掉新页的。
+ */
+let loadToken = 0
+
 async function loadAssets() {
+  const token = ++loadToken
+  loading.value = true
   const result = await getAssets({
     type: currentFilter.value ?? '',
-    page: 1,
-    pageSize: 20
+    page: currentPage.value,
+    pageSize: pageSize.value,
   })
-  if (result.success) {
-    assets.value = result.assets
-  } else {
+  // 已有更新的请求在路上，这次结果作废（loading 交给那一次收尾）
+  if (token !== loadToken) return
+  loading.value = false
+
+  if (!result.success) {
     ElMessage({
       message: '获取资产列表失败:' + result.message,
       type: 'error',
     })
+    return
   }
+
+  total.value = result.pagination?.total ?? result.assets.length
+
+  // 删空当前页后总页数会缩短，此时停在一个空页上，往前退到仍有数据的那一页
+  const totalPages = result.pagination?.totalPages ?? 1
+  if (result.assets.length === 0 && currentPage.value > 1) {
+    currentPage.value = Math.max(1, Math.min(currentPage.value - 1, totalPages))
+    await loadAssets()
+    return
+  }
+
+  assets.value = result.assets
 }
 
 const handleDownload = async (asset: AssetWithId) => {
@@ -448,10 +509,47 @@ onMounted(() => {
 
 .filter-bar {
   display: flex;
-  gap: 10px;
+  align-items: center;
+  /* 筛选按钮靠左，分页靠右 */
+  justify-content: space-between;
+  gap: 20px;
   padding: 20px 30px;
   background: #1a1a1a;
   border-bottom: 1px solid #333;
+  flex-wrap: wrap;
+}
+
+.filter-group {
+  display: flex;
+  gap: 10px;
+}
+
+/*
+ * Element Plus 默认是亮色主题，这里只改它读取的 CSS 变量，
+ * 不去覆盖内部类名，升级时不容易失效。
+ */
+.asset-pagination {
+  --el-color-primary: #0066cc;
+  --el-text-color-regular: #aaa;
+  --el-text-color-primary: #ddd;
+  --el-text-color-placeholder: #888;
+  --el-disabled-text-color: #666;
+  --el-border-color: #444;
+  --el-border-color-hover: #0066cc;
+  --el-fill-color-blank: #2a2a2a;
+  --el-fill-color-light: #333;
+  --el-pagination-bg-color: #2a2a2a;
+  --el-pagination-text-color: #aaa;
+  --el-pagination-button-color: #aaa;
+  --el-pagination-button-bg-color: #2a2a2a;
+  --el-pagination-button-disabled-color: #666;
+  --el-pagination-button-disabled-bg-color: #222;
+  --el-pagination-hover-color: #fff;
+}
+
+/* 页长下拉没有 teleport，弹层跟着上面的变量一起变深 */
+.asset-pagination :deep(.el-select-dropdown__item.is-selected) {
+  color: #4d9bff;
 }
 
 .filter-btn {
