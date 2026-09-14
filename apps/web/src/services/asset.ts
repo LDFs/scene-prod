@@ -215,6 +215,20 @@ export function getModelUrl(asset: AssetWithId): string {
 }
 
 /**
+ * 获取贴图资源 URL。
+ * 贴图没有 compressed 产物，走的是资产本体：优先云存储的 cloudUrls.file，回落本地静态路径。
+ * @param asset 贴图资产
+ * @returns 可直接交给 TextureLoader 的地址
+ */
+export function getTextureUrl(asset: AssetWithId): string {
+  const cloudUrl = asset.cloudUrls?.file
+  if (cloudUrl) {
+    return cloudUrl.startsWith('http') ? cloudUrl : 'https://' + cloudUrl
+  }
+  return getAssetUrl(asset)
+}
+
+/**
  * 获取 LOD 模型 URL
  * @param asset
  * @param lod LOD 级别，0 1 2

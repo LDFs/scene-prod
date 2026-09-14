@@ -62,7 +62,7 @@
       </div>
     </div>
 
-    <!-- 环境贴图部分 -->
+    <!-- 贴图部分 -->
     <div class="section" id="env-section">
       <div class="section-header">
         <h4>贴图</h4>
@@ -73,11 +73,11 @@
 
       <div v-if="loading" class="loading">加载中...</div>
 
-      <div v-else-if="environments.length === 0" class="empty">暂无环境贴图</div>
+      <div v-else-if="textures.length === 0" class="empty">暂无贴图资源</div>
 
       <div v-else class="section-scroll-container" ref="textureContainerRef">
         <div
-          v-for="env in environments"
+          v-for="env in textures"
           :key="env._id"
           class="item"
           draggable="true"
@@ -97,8 +97,8 @@
     </div>
 
     <!-- 3D Tiles 部分 -->
+    <!-- 尚未打通，先屏蔽
     <div class="section">
-      <!-- 3D Tiles 暂无上传入口：服务端只按 .tileset 扩展名归类，上传链路还没打通 -->
       <div class="section-header">
         <h4>3D Tiles</h4>
       </div>
@@ -127,6 +127,7 @@
         </div>
       </div>
     </div>
+     -->
   </div>
 </template>
 
@@ -143,7 +144,7 @@
 
 
 import { ref, computed, watch, nextTick, onMounted, onUnmounted } from 'vue'
-import { getAssets, getModelUrl } from '@/services/asset'
+import { getAssets, getModelUrl, getTextureUrl } from '@/services/asset'
 import { AssetWithId } from '@scene-prod/shared'
 import { useAssetUpload, MODEL_UPLOAD_ACCEPT, TEXTURE_UPLOAD_ACCEPT } from '@/composables/useAssetUpload'
 
@@ -312,7 +313,7 @@ const {
 } = createSection('model')
 
 const {
-  items: environments,
+  items: textures,
   containerRef: textureContainerRef,
   sentinelRef: textureSentinelRef,
   loadingMore: textureLoadingMore,
@@ -354,7 +355,7 @@ const loadAssets = async (silent = false) => {
   }
 }
 // 只有处理完成（ready）的模型才允许拖拽进场景；pending/processing/failed 均禁止
-const isModelReady = (model: AssetWithId) => model.processingStatus === 'ready'
+const isModelReady = (model: AssetWithId) => model.processingStatus === 'ready' || model.processingStatus === 'skipped'
 
 // —— 轮询：只要还有模型在后台处理（pending/processing），就定时刷新，直到全部 ready/failed —— //
 const POLL_INTERVAL = 5000
@@ -451,6 +452,7 @@ const onDragGeo = (event: DragEvent, type: string) => {
 }
 
 const onDragStart = (event: DragEvent, model: AssetWithId) => {
+  console.log("=-=", event, model)
   // 后台仍在处理的模型，阻止拖拽
   if (model && !isModelReady(model)) {
     event.preventDefault();
@@ -472,10 +474,14 @@ const onDragStart = (event: DragEvent, model: AssetWithId) => {
     event.dataTransfer?.setData('name', model.name)
     // 尺寸归一化因子，实例化时乘到模型根 scale 上
     event.dataTransfer?.setData('normalizeScale', String(model.sizing?.normalizeScale ?? 1))
+    // 扩展名与资产 id：材质面板的贴图槽位靠 format 判断能不能当贴图用
+    event.dataTransfer?.setData('format', model.format ?? '')
+    event.dataTransfer?.setData('assetId', model._id)
   }
 }
 const getAssetUrl = (asset: AssetWithId) => {
-  return getModelUrl(asset)
+  // 贴图没有模型那套 compressed/LOD 产物，得走资产本体的地址
+  return asset.type === 'texture' ? getTextureUrl(asset) : getModelUrl(asset)
 }
 
 onMounted(() => {
@@ -514,7 +520,7 @@ h3 {
 
 .section-scroll-container {
   width: 100%;
-  max-height: 300px;
+  max-height: 460px;
   overflow-y: scroll;
   scrollbar-width: thin;
   display: flex;

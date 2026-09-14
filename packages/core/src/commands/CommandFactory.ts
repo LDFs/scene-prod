@@ -186,6 +186,45 @@ export class MaterialObjectCommand implements MaterialCommand {
   }
 }
 
+/** 可拖拽替换的贴图槽位 */
+export type MaterialMapSlot = 'map' | 'normalMap'
+
+/**
+ * 贴图替换指令（从资源库拖图到材质面板触发）
+ *
+ * 没有并进 MaterialObjectCommand：那条链路的 oldState/newState 是整份材质快照，
+ * 被 AI 的 setObjectMaterial 和面板的 mat.clone() 共用。把贴图并进去后，
+ * "撤销一次改颜色"会连带把贴图回滚到那次快照的状态，交叉撤销的语义就乱了。
+ */
+export class MaterialMapCommand implements ActualCommand {
+  constructor(
+    private object: THREE.Object3D,
+    /** 直接持有材质实例：面板编辑的就是 mesh.material[0]，必须作用在同一个实例上 */
+    private material: THREE.Material,
+    private slot: MaterialMapSlot,
+    private oldTexture: THREE.Texture | null,
+    private newTexture: THREE.Texture | null,
+  ) {}
+
+  private apply(texture: THREE.Texture | null) {
+    ;(this.material as any)[this.slot] = texture
+    // 贴图在有/无之间切换会改变着色器的 define，不重编译不会生效
+    this.material.needsUpdate = true
+    // 持久化靠这个标记决定要不要 diff 这个网格的材质
+    this.object.userData.materialModified = true
+  }
+
+  execute(): void {
+    this.apply(this.newTexture)
+  }
+  undo(): void {
+    this.apply(this.oldTexture)
+  }
+  redo(): void {
+    this.apply(this.newTexture)
+  }
+}
+
 export class PropertiyBaseCommand implements ActualCommand {
   private object: THREE.Object3D | null
   private oldProperty: PropertyType

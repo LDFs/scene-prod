@@ -10,6 +10,7 @@ import type { SerializedObject, SceneMetadata, Asset } from '@scene-prod/shared'
 import { IEditorAdapter, ISceneRepository } from './adapter'
 import { getXYZValueWithDefault } from './utils/sceneTools'
 import { createPrimitive, type PrimitiveType } from './utils/objectFactory'
+import { loadAssetTexture } from './utils/textureCache'
 
 /**
  * 创建对象的描述符，供 createObject 派发使用
@@ -40,6 +41,19 @@ export class PersistenceManager {
     'blending', 'side', 'transparent', 'depthTest', 'depthWrite',
     'vertexColors', 'wireframe', 'flatShading',
   ] as const
+  /** 可被资源库贴图替换的槽位，与 MaterialPanel 的 TEXTURE_SLOTS 对应 */
+  private static readonly MATERIAL_TEXTURE_KEYS = ['map', 'normalMap'] as const
+  /** 各槽位的色彩空间：颜色贴图走 sRGB，法线这类数据贴图不能做色彩转换 */
+  private static readonly MATERIAL_TEXTURE_COLOR_SPACE: Record<string, THREE.ColorSpace> = {
+    map: THREE.SRGBColorSpace,
+    normalMap: THREE.NoColorSpace,
+  }
+  /**
+   * 模型自带的内嵌贴图没有 url，无法序列化，用哨兵占位。
+   * 必须和"没有贴图"（null）区分开：否则用户清掉模型自带的贴图后 diff 为空，
+   * 重载场景又会把那张贴图冒出来。
+   */
+  private static readonly EMBEDDED_TEXTURE = '@embedded'
 
   private sceneManager: SceneManager | null = null
   private objectMap: Map<string, string> = new Map()
@@ -126,7 +140,7 @@ export class PersistenceManager {
           type: geometry?.type || 'Unknown',
           parameters: geometry?.parameters || {},
         },
-        material: material?.toJSON() || {},
+        material: this.serializeStandaloneMaterial(material),
         // children: object.children?.map(child => this.serializeObject(child)),
       }
     }
@@ -160,7 +174,8 @@ export class PersistenceManager {
             )
           }
         }
-        this.applyModifications(model, data.modifications)
+        // 贴图还原是异步的，必须等完再返回：缩略图生成/首帧渲染都依赖材质已经就位
+        await this.applyModifications(model, data.modifications)
       }
       return model
     } else {
@@ -192,6 +207,7 @@ export class PersistenceManager {
         wireframe: data.material?.wireframe ?? false,
         flatShading: data.material?.flatShading ?? false,
       })
+      await this.applyMaterialTextureUrls(material, data.material)
       const mesh = new THREE.Mesh(geometry, material)
       mesh.uuid = data.id
       mesh.name = data.name
@@ -337,7 +353,51 @@ export class PersistenceManager {
   }
 
   /**
-   * 提取单个材质中需要跟踪的属性，颜色类转为 #rrggbb 字符串
+   * 序列化基础几何体（Box/Sphere 等非 GLTF 对象）的材质。
+   *
+   * Material.toJSON() 会把贴图的图片一起序列化成 base64 data URL 塞进 images[]，
+   * 拖一张 2K 贴图进立方体再保存就能把场景 JSON 撑到几 MB。
+   * 这里把图片数据整体剥掉，只留资源 url（`<slot>Url`），反序列化时按 url 重新加载。
+   */
+  private serializeStandaloneMaterial(material: THREE.Material | undefined): Record<string, any> {
+    if (!material) return {}
+    const json = material.toJSON() as Record<string, any>
+    delete json.textures
+    delete json.images
+    for (const key of PersistenceManager.MATERIAL_TEXTURE_KEYS) {
+      // toJSON 里存的是 texture uuid，图片数据剥掉后它已经指不到任何东西
+      delete json[key]
+      const url = (material as any)[key]?.userData?.assetUrl
+      if (url) json[`${key}Url`] = url
+    }
+    return json
+  }
+
+  /**
+   * 按 `<slot>Url` 字段还原材质上的贴图，用于基础几何体的反序列化
+   */
+  private async applyMaterialTextureUrls(material: THREE.Material, source?: Record<string, any>) {
+    if (!source) return
+    await Promise.all(
+      PersistenceManager.MATERIAL_TEXTURE_KEYS.map(async (key) => {
+        const url = source[`${key}Url`]
+        if (!url) return
+        try {
+          ;(material as any)[key] = await loadAssetTexture(
+            url,
+            PersistenceManager.MATERIAL_TEXTURE_COLOR_SPACE[key],
+          )
+        } catch (error) {
+          // 单张贴图丢了不该让整个对象加载失败，其余属性照常生效
+          console.error(`还原贴图失败(${key}):`, url, error)
+        }
+      }),
+    )
+    material.needsUpdate = true
+  }
+
+  /**
+   * 提取单个材质中需要跟踪的属性，颜色类转为 #rrggbb 字符串，贴图类转为资源 url
    */
   private snapshotMaterial(material: THREE.Material): Record<string, any> {
     const mat = material as any
@@ -347,6 +407,10 @@ export class PersistenceManager {
     }
     for (const key of PersistenceManager.MATERIAL_SCALAR_KEYS) {
       if (mat[key] !== undefined) snap[key] = mat[key]
+    }
+    for (const key of PersistenceManager.MATERIAL_TEXTURE_KEYS) {
+      const texture = mat[key]
+      snap[key] = texture ? texture.userData?.assetUrl ?? PersistenceManager.EMBEDDED_TEXTURE : null
     }
     return snap
   }
@@ -366,9 +430,9 @@ export class PersistenceManager {
   }
 
   /**
-   * 将一组材质属性应用到材质上（颜色类走 .set，其余直接赋值）
+   * 将一组材质属性应用到材质上（颜色类走 .set，贴图类按 url 异步加载，其余直接赋值）
    */
-  private applyMaterialProps(material: THREE.Material, props: Record<string, any>) {
+  private async applyMaterialProps(material: THREE.Material, props: Record<string, any>) {
     const mat = material as any
     for (const key of PersistenceManager.MATERIAL_COLOR_KEYS) {
       if (props[key] !== undefined && mat[key]) mat[key].set(props[key])
@@ -376,6 +440,23 @@ export class PersistenceManager {
     for (const key of PersistenceManager.MATERIAL_SCALAR_KEYS) {
       if (props[key] !== undefined) mat[key] = props[key]
     }
+    await Promise.all(
+      PersistenceManager.MATERIAL_TEXTURE_KEYS.map(async (key) => {
+        const value = props[key]
+        // 没记录这个槽位，或记录的是不可重建的内嵌贴图，都保持模型自带的状态
+        if (value === undefined || value === PersistenceManager.EMBEDDED_TEXTURE) return
+        // null 表示用户明确清掉了这个槽位
+        if (value === null) {
+          mat[key] = null
+          return
+        }
+        try {
+          mat[key] = await loadAssetTexture(value, PersistenceManager.MATERIAL_TEXTURE_COLOR_SPACE[key])
+        } catch (error) {
+          console.error(`还原贴图失败(${key}):`, value, error)
+        }
+      }),
+    )
     mat.needsUpdate = true
   }
 
@@ -485,7 +566,7 @@ export class PersistenceManager {
    * @param rootObject 根对象
    * @param modifications 修改的记录
    */
-  applyModifications(rootObject: THREE.Object3D, modifications: Record<string, any>) {
+  async applyModifications(rootObject: THREE.Object3D, modifications: Record<string, any>) {
     console.log('反序列化模型的修改--', modifications)
     for (const [path, mods] of Object.entries(modifications)) {
       const child = this.findObjectByPath(rootObject, path)
@@ -511,7 +592,7 @@ export class PersistenceManager {
           if (mods.material) {
             const target = Array.isArray(child.material) ? child.material[0] : child.material
             if (target) {
-              this.applyMaterialProps(target, mods.material)
+              await this.applyMaterialProps(target, mods.material)
               child.userData.materialModified = true
             }
           }
@@ -519,7 +600,7 @@ export class PersistenceManager {
           if (mods.materials && Array.isArray(child.material)) {
             for (const [i, props] of Object.entries(mods.materials)) {
               const target = child.material[Number(i)]
-              if (target) this.applyMaterialProps(target, props as Record<string, any>)
+              if (target) await this.applyMaterialProps(target, props as Record<string, any>)
             }
             child.userData.materialModified = true
           }

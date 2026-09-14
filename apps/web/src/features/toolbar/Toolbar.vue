@@ -48,7 +48,7 @@
     </div>
 
     <div class="group">
-      <button @click="showImportDialog = true" title="批量导入">📥 批量导入</button>
+      <!-- <button @click="showImportDialog = true" title="批量导入">📥 批量导入</button> -->
       <button @click="save" class="save-btn" title="保存(Ctrl+S)">💾 保存</button>
       <button @click="share" class="save-btn">预览</button>
     </div>
