@@ -50,6 +50,7 @@ export class HttpSceneRepository extends ISceneRepository {
             backgroundColor: sceneData.backgroundColor || '#ffffff',
             ambientIntensity: sceneData.ambientIntensity || 1.0,
             cameraPosition: sceneData.cameraPosition || { x: 5, y: 5, z: 5 },
+            cameraQuaternion: sceneData.cameraQuaternion
           }
         })
       })

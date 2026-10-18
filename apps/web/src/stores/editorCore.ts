@@ -19,6 +19,8 @@ export const useEditorCoreStore = defineStore('editorCore', () => {
     backgroundColor: '#ffffff',
     ambientIntensity: 1.0,
     cameraPosition: { x: 5, y: 5, z: 5 },
+    cameraQuaternion: { x: 0, y: 0, z: 0, w: 0 },
+    isPublished: false
   });
   const selectedObject: Ref<THREE.Object3D | null> = shallowRef(null);  
   const sceneObjects: Ref<THREE.Object3D[]> = shallowRef([]);

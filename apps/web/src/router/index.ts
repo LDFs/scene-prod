@@ -10,6 +10,8 @@ const Home = () => import('../views/home/index.vue')
 const moduleScene = () => import("../views/moduleScene/index.vue")
 const modelDisplay = () => import("../views/modelDisplay/index.vue")
 
+const shaderBase = () => import('../views/shadersWork/shader-base.vue')
+
 const router = createRouter({
   history: createWebHistory(),
   routes: [
@@ -40,9 +42,14 @@ const router = createRouter({
     {
       path: '/moduleScene',
       component: moduleScene
-    },{
+    },
+    {
       path: '/modelDisplay',
       component: modelDisplay
+    },
+    {
+      path: '/shaderBase',
+      component: shaderBase
     }
   ]
 })

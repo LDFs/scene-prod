@@ -25,6 +25,13 @@ const Vec3Schema = z.object({
   z: z.number().optional(),
 })
 
+const QuaternionSchema = z.object({
+  x: z.number(),
+  y: z.number(),
+  z: z.number(),
+  w: z.number(),
+})
+
 export const SerializedObjectSchema = z.object({
   id: z.string(),
   type: z.string(),
@@ -61,6 +68,7 @@ export const SceneDataSchema = z.object({
   backgroundColor: z.string(),
   ambientIntensity: z.number(),
   cameraPosition: Vec3Schema.optional(),
+  cameraQuaternion: QuaternionSchema.optional(),
   // 改场景是否发布，是的话才可以预览查看
   isPublished: z.boolean().default(false)
 })

@@ -657,6 +657,7 @@ export class PersistenceManager {
         this.sceneManager?.setCameraFar(sceneData.metadata.cameraFar)
       }
       this.sceneManager?.setCameraPosition(getXYZValueWithDefault(sceneData.metadata.cameraPosition, 5))
+      this.sceneManager?.setCameraQuaternion(sceneData.metadata.cameraQuaternion)
       const envUrl = sceneData.metadata.environmentUrl
       if (envUrl) {
         try {
@@ -726,6 +727,7 @@ export class PersistenceManager {
       backgroundColor: storeData.backgroundColor || '#ffffff',
       ambientIntensity: storeData.ambientIntensity || 1.0,
       cameraPosition: this.sceneManager?.getCameraPosition() || { x: 5, y: 5, z: 5 },
+      cameraQuaternion: this.sceneManager?.getCameraQuaternion() || { x: 0, y: 0, z: 0, w: 0 },
       isPublished: storeData.isPublished
     })
     if (!result) {

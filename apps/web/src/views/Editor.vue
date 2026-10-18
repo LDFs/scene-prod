@@ -117,7 +117,7 @@ const handleKeydown = (event: KeyboardEvent) => {
   if (event.key === 'Delete') {
     event.preventDefault()
     if (selectedObject.value) {
-      const deleteCommand = new DeleteObjectCommand(sceneManager?.value, selectedObject.value)
+      const deleteCommand = new DeleteObjectCommand(sceneManager?.value!, selectedObject.value)
       historyStore.execute(deleteCommand)
       editorCoreStore.clearSelection()
     }

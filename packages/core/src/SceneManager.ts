@@ -630,6 +630,20 @@ export class SceneManager {
     this.controls.update()
   }
 
+  getCameraQuaternion(): { x: number; y: number; z: number, w: number } {
+    const quaternion = this.camera.quaternion
+    return quaternion.clone()
+  }
+
+  setCameraQuaternion(quaternion: { x: number; y: number; z: number, w: number } | undefined) {
+    if(!quaternion) {
+      this.camera.quaternion.set(0,0,0,0)
+    }else {
+      const {x, y, z, w} = quaternion
+      this.camera.quaternion.set(x, y, z, w)
+    }
+  }
+
   /**
    * 辅助网格
    */

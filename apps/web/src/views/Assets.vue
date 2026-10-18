@@ -5,9 +5,9 @@
       <h1>资产管理</h1>
       <button class="upload-btn" @click="triggerFileInput"><span>📤</span> 上传资产</button>
       <!-- .gltf 依赖 .bin 和贴图，整目录选择能保留相对路径，是多文件资产最可靠的入口 -->
-      <button class="upload-btn" @click="triggerFolderInput" title="上传 .gltf 及其依赖时推荐">
+      <!-- <button class="upload-btn" @click="triggerFolderInput" title="上传 .gltf 及其依赖时推荐">
         <span>📁</span> 上传文件夹
-      </button>
+      </button> -->
       <input
         ref="fileInput"
         type="file"
@@ -16,7 +16,7 @@
         @change="handleFileSelect"
         style="display: none"
       />
-      <input ref="folderInput" type="file" webkitdirectory multiple @change="handleFileSelect" style="display: none" />
+      <!-- <input ref="folderInput" type="file" webkitdirectory multiple @change="handleFileSelect" style="display: none" /> -->
     </div>
 
     <div class="filter-bar">
