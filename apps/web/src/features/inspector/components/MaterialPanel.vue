@@ -1,5 +1,5 @@
 <template>
-  <div class="material-panel" v-if="material" :key="'material-' + forceUpdateKey">
+  <div class="material-panel" v-if="material">
     <h3>材质</h3>
 
     <div class="section">
@@ -11,7 +11,7 @@
 
       <div class="prop-row" v-if="material.color">
         <label>颜色</label>
-        <input type="color" :value="'#' + material.color.getHexString()" @change="updateColor">
+        <input type="color" :value="colorHex" @change="updateColor" />
       </div>
 
       <!-- 贴图槽位：从资源库「贴图」分区拖拽进来即替换 -->
@@ -49,11 +49,27 @@
       <h4>PBR 属性</h4>
       <div class="prop-row" v-if="material.roughness !== undefined">
         <label>粗糙度</label>
-        <input type="number" min="0" max="1" step="0.1" name="roughness" :value="material.roughness" @change="onMaterialChange">
+        <input
+          type="number"
+          min="0"
+          max="1"
+          step="0.1"
+          name="roughness"
+          :value="roughness"
+          @change="onMaterialChange"
+        />
       </div>
       <div class="prop-row" v-if="material.metalness !== undefined">
         <label>金属度</label>
-        <input type="number" min="0" max="1" step="0.1" name="metalness" :value="material.metalness" @change="onMaterialChange">
+        <input
+          type="number"
+          min="0"
+          max="1"
+          step="0.1"
+          name="metalness"
+          :value="metalness"
+          @change="onMaterialChange"
+        />
       </div>
     </div>
 
@@ -61,12 +77,19 @@
       <h4>自发光</h4>
       <div class="prop-row" v-if="material.emissive !== undefined">
         <label>颜色</label>
-        <input type="color" :value="material.emissive" @change="updateEmissive">
+        <input type="color" :value="emissiveHex" @change="updateEmissive" />
       </div>
       <div class="prop-row" v-if="material.emissiveIntensity !== undefined">
         <label>强度</label>
-        <input type="number" min="0" max="5" step="0.1" name="emissiveIntensity" :value="material.emissiveIntensity"
-          @change="onMaterialChange">
+        <input
+          type="number"
+          min="0"
+          max="5"
+          step="0.1"
+          name="emissiveIntensity"
+          :value="emissiveIntensity"
+          @change="onMaterialChange"
+        />
       </div>
     </div>
 
@@ -74,7 +97,7 @@
       <h4>渲染选项</h4>
       <div class="prop-row">
         <label>混合模式</label>
-        <select name="blending" :value="material.blending" @change="onMaterialChange">
+        <select name="blending" :value="blending" @change="onMaterialChange">
           <option :value="THREE.NoBlending">No Blending</option>
           <option :value="THREE.NormalBlending">Normal</option>
           <option :value="THREE.AdditiveBlending">Additive</option>
@@ -85,7 +108,7 @@
 
       <div class="prop-row">
         <label>渲染面</label>
-        <select name="side" :value="material.side" @change="onShaderAffectingChange">
+        <select name="side" :value="side" @change="onMaterialChange">
           <option :value="THREE.FrontSide">Front</option>
           <option :value="THREE.BackSide">Back</option>
           <option :value="THREE.DoubleSide">Double</option>
@@ -94,44 +117,44 @@
 
       <div class="prop-row">
         <label>透明</label>
-        <input type="checkbox" name="transparent" :checked="material.transparent" @change="onShaderAffectingChange">
+        <input type="checkbox" name="transparent" :checked="transparent" @change="onShaderAffectingChange" />
       </div>
 
       <div class="prop-row" v-if="material.opacity !== undefined">
         <label>不透明度</label>
-        <input type="range" min="0" max="1" step="0.01" :value="material.opacity" @input="onOpacityInput">
+        <input type="range" min="0" max="1" step="0.01" :value="opacityVal" @change="onOpacityChange" />
         <span class="range-val">{{ opacityVal.toFixed(2) }}</span>
       </div>
 
       <div class="prop-row" v-if="material.alphaTest !== undefined">
         <label>Alpha裁切</label>
-        <input type="range" min="0" max="1" step="0.01" :value="material.alphaTest" @input="onAlphaTestInput">
+        <input type="range" min="0" max="1" step="0.01" :value="alphaTestVal" @change="onAlphaTestChange" />
         <span class="range-val">{{ alphaTestVal.toFixed(2) }}</span>
       </div>
 
       <div class="prop-row">
         <label>深度测试</label>
-        <input type="checkbox" name="depthTest" :checked="material.depthTest" @change="onShaderAffectingChange">
+        <input type="checkbox" name="depthTest" :checked="depthTest" @change="onShaderAffectingChange" />
       </div>
 
       <div class="prop-row">
         <label>深度写入</label>
-        <input type="checkbox" name="depthWrite" :checked="material.depthWrite" @change="onShaderAffectingChange">
+        <input type="checkbox" name="depthWrite" :checked="depthWrite" @change="onShaderAffectingChange" />
       </div>
 
       <div class="prop-row">
         <label>顶点颜色</label>
-        <input type="checkbox" name="vertexColors" :checked="material.vertexColors" @change="onShaderAffectingChange">
+        <input type="checkbox" name="vertexColors" :checked="vertexColors" @change="onShaderAffectingChange" />
       </div>
 
       <div class="prop-row" v-if="material.wireframe !== undefined">
         <label>线框</label>
-        <input type="checkbox" name="wireframe" :checked="material.wireframe" @change="onShaderAffectingChange">
+        <input type="checkbox" name="wireframe" :checked="wireframe" @change="onShaderAffectingChange" />
       </div>
 
       <div class="prop-row" v-if="material.flatShading !== undefined">
         <label>平面着色</label>
-        <input type="checkbox" name="flatShading" :checked="material.flatShading" @change="onShaderAffectingChange">
+        <input type="checkbox" name="flatShading" :checked="flatShading" @change="onShaderAffectingChange" />
       </div>
     </div>
   </div>
@@ -141,35 +164,57 @@
 </template>
 
 <script lang="ts" setup>
-import { useEditorCoreStore } from '@/stores/editorCore';
-import { storeToRefs } from 'pinia';
-import * as THREE from 'three';
-import { computed, watch, ref } from 'vue';
-import { MaterialObjectCommand, MaterialMapCommand, loadAssetTexture, type MaterialMapSlot } from '@scene-prod/core';
-import { useHistoryStore } from '@/stores/history';
-import { ElMessage } from 'element-plus';
+import { useEditorCoreStore } from '@/stores/editorCore'
+import { storeToRefs } from 'pinia'
+import * as THREE from 'three'
+import { computed, ref } from 'vue'
+import { MaterialMapCommand, loadAssetTexture, type MaterialMapSlot, HandleActualCommand } from '@scene-prod/core'
+import { useHistoryStore } from '@/stores/history'
+import { ElMessage } from 'element-plus'
 
-const editorCoreStore = useEditorCoreStore();
-const { selectedObject, stateVersion } = storeToRefs(editorCoreStore);
-const historyStore = useHistoryStore();
+const editorCoreStore = useEditorCoreStore()
+const { selectedObject, materialVersion } = storeToRefs(editorCoreStore)
+const historyStore = useHistoryStore()
 
-const forceUpdateKey = ref(0);
-
-watch(stateVersion, () => {
-  forceUpdateKey.value++;
-})
-
-const getMesh = (): THREE.Mesh | null => {
-  const obj = selectedObject.value
-  return obj instanceof THREE.Mesh ? obj : null
+/** 统一解析面板操作的标准材质：始终取 material[0]，非标准材质返回 null */
+const resolveMat = (obj: THREE.Object3D | null): THREE.MeshStandardMaterial | null => {
+  if (!(obj instanceof THREE.Mesh)) return null
+  const mat = Array.isArray(obj.material) ? obj.material[0] : obj.material
+  return mat instanceof THREE.MeshStandardMaterial ? mat : null
 }
 
+// material 依赖 materialVersion：three 对象原地 mutate 引用不变，靠版本号驱动重算
 const material = computed(() => {
-  const mesh = getMesh()
-  if (!mesh) return null
-  const mat = Array.isArray(mesh.material) ? mesh.material[0] : mesh.material
-  return mat instanceof THREE.MeshStandardMaterial ? mat : null
+  materialVersion.value
+  return resolveMat(selectedObject.value)
 })
+
+/**
+ * 只读派生：three 对象原地修改引用不变，Vue 侦测不到，
+ * 读 materialVersion 建立依赖，编辑/撤销/重做后强制重算，保证面板显示跟随。
+ */
+const reactiveMatProp = <T,>(read: (mat: THREE.MeshStandardMaterial) => T, fallback: T) =>
+  computed(() => {
+    materialVersion.value
+    return material.value ? read(material.value) : fallback
+  })
+
+/**
+ * 统一提交材质改动：立即应用新值，并压入一条可撤销/重做的指令。
+ * setter 在 undo/redo 时按当前选中对象重新解析材质，天然兼容数组材质与中途换选。
+ */
+const commitMaterial = <T,>(oldValue: T, newValue: T, apply: (mat: THREE.MeshStandardMaterial, value: T) => void) => {
+  const object = selectedObject.value
+  const setter = (value: T) => {
+    const mat = resolveMat(object)
+    if (mat) {
+      apply(mat, value)
+      useEditorCoreStore().notifyMaterialUpdate()
+    }
+  }
+  historyStore.execute(new HandleActualCommand<T>(oldValue, newValue, setter))
+  if (object) object.userData.materialModified = true
+}
 
 // —— 贴图槽位 —— //
 
@@ -265,7 +310,7 @@ const onSlotDrop = async (event: DragEvent, slot: TextureSlotDef) => {
     loadingSlot.value = null
   }
   texture.name = name
-  
+
   // 加载期间用户可能换了选中对象，这次结果不能再落到新材质上
   if (material.value !== mat) return
   const oldTexture = getTextureOf(mat, slot.key)
@@ -284,91 +329,78 @@ const clearSlot = (slot: TextureSlotDef) => {
   historyStore.execute(new MaterialMapCommand(object, mat, slot.key, oldTexture, null))
 }
 
-const withMaterialCommand = (applyChange: (mat: THREE.MeshStandardMaterial) => void) => {
-  const mat = material.value
-  const object = selectedObject.value
-  if (!mat || !object) return
-  const oldState = mat.clone();
-  applyChange(mat);
-  const newState = mat.clone();
+// ===== 面板显示值（全部跟随 materialVersion） =====
+const colorHex = reactiveMatProp((m) => '#' + m.color.getHexString(), '#000000')
+const emissiveHex = reactiveMatProp((m) => '#' + m.emissive.getHexString(), '#000000')
+const roughness = reactiveMatProp((m) => m.roughness, 0)
+const metalness = reactiveMatProp((m) => m.metalness, 0)
+const emissiveIntensity = reactiveMatProp((m) => m.emissiveIntensity, 0)
+const blending = reactiveMatProp((m) => m.blending, THREE.NormalBlending)
+const side = reactiveMatProp((m) => m.side, THREE.FrontSide)
+const transparent = reactiveMatProp((m) => m.transparent, false)
+const depthTest = reactiveMatProp((m) => m.depthTest, true)
+const depthWrite = reactiveMatProp((m) => m.depthWrite, true)
+const vertexColors = reactiveMatProp((m) => m.vertexColors, false)
+const wireframe = reactiveMatProp((m) => m.wireframe, false)
+const flatShading = reactiveMatProp((m) => m.flatShading, false)
+const opacityVal = reactiveMatProp((m) => m.opacity, 1)
+const alphaTestVal = reactiveMatProp((m) => m.alphaTest, 0)
 
-  const cmd = new MaterialObjectCommand(object, oldState, newState);
-  historyStore.pushWithoutExecute(cmd);
-  object.userData.materialModified = true;
-  editorCoreStore.notifyTreeUpdate();
-}
+// ===== 编辑提交 =====
 
+/** 颜色 */
 const updateColor = (event: Event) => {
-  const val = (event.target as HTMLInputElement).value;
-
-  withMaterialCommand((mat) => {
-    mat.color.set(val);
-  });
+  const mat = material.value
+  if (!mat) return
+  const val = (event.target as HTMLInputElement).value
+  commitMaterial(mat.color.clone(), new THREE.Color(val), (m, v) => m.color.copy(v))
 }
 
-/**
- * 自发光
- */
+/** 自发光颜色 */
 const updateEmissive = (event: Event) => {
-  const val = (event.target as HTMLInputElement).value;
-
-  withMaterialCommand((mat) => {
-    mat.emissive.set(val);
-  });
+  const mat = material.value
+  if (!mat) return
+  const val = (event.target as HTMLInputElement).value
+  commitMaterial(mat.emissive.clone(), new THREE.Color(val), (m, v) => m.emissive.copy(v))
 }
 
-/**
- * 值类型的修改
- */
+/** 数值 / 枚举类（粗糙度、金属度、自发光强度、混合模式、渲染面） */
 const onMaterialChange = (event: Event) => {
-  const key = (event.target as HTMLInputElement).name;
-  
-  withMaterialCommand((mat) => {
-    (mat as any)[key] = parseFloat((event.target as HTMLInputElement).value);
-  });
+  const mat = material.value
+  if (!mat) return
+  const { name, value } = event.target as HTMLInputElement
+  commitMaterial((mat as any)[name] as number, Number(value), (m, v) => {
+    ;(m as any)[name] = v
+  })
 }
 
-/**
- * boolean 类型的修改
- */
+/** 布尔类：改后需重新编译着色器 */
 const onShaderAffectingChange = (event: Event) => {
-  const key = (event.target as HTMLInputElement).name;
-
-  withMaterialCommand((mat) => {
-    (mat as any)[key] = (event.target as HTMLInputElement).checked;
-    // 触发着色器重新编译
-    mat.needsUpdate = true;
-  });
+  const mat = material.value
+  if (!mat) return
+  const { name, checked } = event.target as HTMLInputElement
+  commitMaterial((mat as any)[name] as boolean, checked, (m, v) => {
+    ;(m as any)[name] = v
+    m.needsUpdate = true
+  })
 }
 
-const opacityVal = computed(() => {
-  return material.value?.opacity ?? 1;
-})
-
-const alphaTestVal = computed(() => {
-  return material.value?.alphaTest ?? 0;
-})
-
-/**
- * 透明度修改
- */
-const onOpacityInput = (event: Event) => {
-  const val = (event.target as HTMLInputElement).value;
-
-  withMaterialCommand((mat) => {
-    mat.opacity = parseFloat(val);
-  });
+/** 不透明度（松手提交一条，拖动过程中不灌历史） */
+const onOpacityChange = (event: Event) => {
+  const mat = material.value
+  if (!mat) return
+  commitMaterial(mat.opacity, parseFloat((event.target as HTMLInputElement).value), (m, v) => {
+    m.opacity = v
+  })
 }
 
-/**
- * Alpha裁切修改
- */
-const onAlphaTestInput = (event: Event) => {
-  const val = (event.target as HTMLInputElement).value;
-
-  withMaterialCommand((mat) => {
-    mat.alphaTest = parseFloat(val);
-  });
+/** Alpha 裁切（松手提交一条） */
+const onAlphaTestChange = (event: Event) => {
+  const mat = material.value
+  if (!mat) return
+  commitMaterial(mat.alphaTest, parseFloat((event.target as HTMLInputElement).value), (m, v) => {
+    m.alphaTest = v
+  })
 }
 </script>
 
@@ -438,19 +470,19 @@ input:focus {
   outline: none;
 }
 
-input[type="color"] {
+input[type='color'] {
   padding: 0;
   height: 24px;
   cursor: pointer;
 }
 
-input[type="checkbox"] {
+input[type='checkbox'] {
   flex: none;
   width: 16px;
   height: 16px;
 }
 
-input[type="range"] {
+input[type='range'] {
   -webkit-appearance: auto;
   appearance: auto;
   background: transparent;
@@ -460,7 +492,7 @@ input[type="range"] {
   cursor: pointer;
 }
 
-input[type="range"]:focus {
+input[type='range']:focus {
   border: none;
   outline: none;
 }

@@ -1,5 +1,5 @@
 <template>
-  <div class="scene-settings-panel" :key="'scene-' + forceUpdateKey">
+  <div class="scene-settings-panel">
     <h3>场景配置</h3>
     <div class="section">
       <h4>基本信息</h4>
@@ -120,37 +120,29 @@ import { storeToRefs } from 'pinia';
 import { useEditorCoreStore } from '@/stores/editorCore';
 import { useManagerStore } from '@/stores/manager';
 import { useHistoryStore } from '@/stores/history';
-import { SceneSettingCommand } from '@scene-prod/core';
-import { SceneMetadata } from '@scene-prod/shared';
+import {  HandleActualCommand } from '@scene-prod/core';
 
 const managerStore = useManagerStore();
 const editorStore = useEditorCoreStore();
 const { sceneMetadata } = storeToRefs(editorStore);
 const historyStore = useHistoryStore();
 
-const forceUpdateKey = ref(0);
-
-const withSceneSettingCommand = (applyChange: (sceneMetadata: SceneMetadata) => void) => {
-  const oldState = {...sceneMetadata.value}
-  applyChange(sceneMetadata.value)
-  const newState = {...sceneMetadata.value}
-  const cmd = new SceneSettingCommand(managerStore.sceneManager, oldState, newState, sceneMetadata.value);
-  historyStore.pushWithoutExecute(cmd);
-  forceUpdateKey.value++;
-}
-
 const updateName = (event: Event) => {
-  const val = (event.target as HTMLInputElement).value;
-  withSceneSettingCommand((sceneMetadata) => {
-    sceneMetadata.name = val
-  })
+  const oldValue = sceneMetadata.value.name
+  const newValue = (event.target as HTMLInputElement).value
+  const setter = (value: string) => {
+    sceneMetadata.value.name = value
+  }
+  historyStore.execute(new HandleActualCommand(oldValue, newValue, setter))
 }
 
 const updateDescription = (event: Event) => {
-  const val = (event.target as HTMLTextAreaElement).value;
-  withSceneSettingCommand((sceneMetadata) => {
-    sceneMetadata.description = val
-  })
+  const oldValue = sceneMetadata.value.description
+  const newValue = (event.target as HTMLTextAreaElement).value
+  const setter = (value: string) => {
+    sceneMetadata.value.description = value
+  }
+  historyStore.execute(new HandleActualCommand(oldValue, newValue, setter))
 }
 
 const showStats = ref(false);
@@ -175,24 +167,33 @@ const onTriangleStatsToggle = () => {
 }
 
 const onBackgroundColorChange = (event: Event) => {
-  withSceneSettingCommand((sceneMetadata) => {
-    sceneMetadata.backgroundColor = (event.target as HTMLInputElement).value;
-    managerStore.sceneManager?.setAmbientLight(sceneMetadata.backgroundColor, sceneMetadata.ambientIntensity);
-  })
+  const oldValue = sceneMetadata.value.backgroundColor
+  const newValue = (event.target as HTMLInputElement).value
+  const setter = (value: string) => {
+    sceneMetadata.value.backgroundColor = value
+    managerStore.sceneManager?.setAmbientLight(sceneMetadata.value.backgroundColor, sceneMetadata.value.ambientIntensity);
+  }
+  historyStore.execute(new HandleActualCommand(oldValue, newValue, setter))
 }
 
 const onAmbientIntensityChange = (event: Event) => {
-  withSceneSettingCommand((sceneMetadata) => {
-    sceneMetadata.ambientIntensity = parseFloat((event.target as HTMLInputElement).value);
-    managerStore.sceneManager?.setAmbientLight(sceneMetadata.backgroundColor, sceneMetadata.ambientIntensity);
-  })
+  const oldValue = sceneMetadata.value.ambientIntensity
+  const newValue = parseFloat((event.target as HTMLInputElement).value)
+  const setter = (value: number) => {
+    sceneMetadata.value.ambientIntensity = value
+    managerStore.sceneManager?.setAmbientLight(sceneMetadata.value.backgroundColor, sceneMetadata.value.ambientIntensity);
+  }
+  historyStore.execute(new HandleActualCommand(oldValue, newValue, setter))
 }
 
 const onCameraFarChange = (event: Event) => {
-  withSceneSettingCommand((sceneMetadata) => {
-    sceneMetadata.cameraFar = parseFloat((event.target as HTMLInputElement).value);
-    managerStore.sceneManager?.setCameraFar(sceneMetadata.cameraFar);
-  })
+  const oldValue = sceneMetadata.value.cameraFar
+  const newValue = parseFloat((event.target as HTMLInputElement).value)
+  const setter = (value: number) => {
+    sceneMetadata.value.cameraFar = value
+    managerStore.sceneManager?.setCameraFar(sceneMetadata.value.cameraFar);
+  }
+  historyStore.execute(new HandleActualCommand(oldValue, newValue, setter))
 }
 
 const showAxes = ref(false);

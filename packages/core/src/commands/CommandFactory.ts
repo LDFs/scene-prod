@@ -6,6 +6,27 @@ import { findFreePosition } from '../utils/sceneTools'
 import { setObjectMaterial } from '../utils/objectFactory'
 
 /**
+ * 操作指令集中处理，通过回调函数来具体执行
+ */
+export class HandleActualCommand<T> implements ActualCommand {
+  constructor(
+    private oldValue: T,
+    private newValue: T,
+    private setter: (value: T) => void,
+  ) {}
+
+  execute(): void {
+    this.setter(this.newValue)
+  }
+  undo(): void {
+    this.setter(this.oldValue)
+  }
+  redo(): void {
+    this.setter(this.newValue)
+  }
+}
+
+/**
  * 添加对象指令
  */
 export class AddObjectCommand implements AddCommand {
@@ -331,6 +352,7 @@ export class SceneSettingCommand implements ActualCommand {
  */
 export function fromAICommand(cmd: SceneCommand, sceneManager: SceneManager): ActualCommand | null {
   switch (cmd.commandType) {
+    // 创建基础几何体
     case 'create': {
       let geometry: THREE.BufferGeometry = new THREE.BoxGeometry(cmd.width ?? 1, cmd.height ?? 1, cmd.depth ?? 1)
       if (cmd.objectType === 'sphere') {
@@ -353,14 +375,14 @@ export function fromAICommand(cmd: SceneCommand, sceneManager: SceneManager): Ac
       return new AddObjectCommand(sceneManager, mesh, cmd.allowOverlap)
     }
     case 'delete': {
-      const objects = sceneManager.findObjectByName(cmd.name)
+      const objects = sceneManager.findObjectById(cmd.name)
       if (objects.length > 0) {
         return new DeleteObjectCommand(sceneManager, objects[0])
       }
       return null
     }
     case 'transform': {
-      const objects = sceneManager.findObjectByName(cmd.name)
+      const objects = sceneManager.findObjectById(cmd.id)
       if (!objects || objects.length === 0) return null
       const object = objects[0]
       const oldState: ObjectState = {
@@ -388,7 +410,7 @@ export function fromAICommand(cmd: SceneCommand, sceneManager: SceneManager): Ac
       return new TransformObjectCommand(object, oldState, newState)
     }
     case 'modify_material': {
-      const objects = sceneManager.findObjectByName(cmd.name)
+      const objects = sceneManager.findObjectById(cmd.id)
       if (!objects || objects.length === 0) return null
       const object = objects[0]
       const meshes: THREE.Mesh[] = []
@@ -409,7 +431,7 @@ export function fromAICommand(cmd: SceneCommand, sceneManager: SceneManager): Ac
       return cmds.length === 1 ? cmds[0] : new BatchCommand(cmds, `修改「${cmd.name}」材质`)
     }
     case 'modify_property': {
-      const objects = sceneManager.findObjectByName(cmd.name)
+      const objects = sceneManager.findObjectById(cmd.id)
       if (!objects || objects.length === 0) return null
       const object = objects[0]
       const oldProperty: PropertyType = {
@@ -431,7 +453,10 @@ export class BatchCommand implements ActualCommand {
   // 记录本次真正 execute/redo 成功的指令,undo 只回滚这些
   private executed: ActualCommand[] = []
   private errors: { cmd: ActualCommand; error: unknown; name: string }[] = []
-  constructor(private cmds: ActualCommand[], public label: string) {}
+  constructor(
+    private cmds: ActualCommand[],
+    public label: string,
+  ) {}
   execute() {
     this.executed = []
     this.errors = []

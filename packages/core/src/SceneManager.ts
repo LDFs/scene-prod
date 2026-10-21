@@ -507,13 +507,10 @@ export class SceneManager {
     return found
   }
 
-  findObjectByName(name: string): Array<THREE.Object3D> {
+  findObjectById(id: string): Array<THREE.Object3D> {
     let found: Array<THREE.Object3D> = []
     this.scene.traverse((child) => {
-      if (child.name === name) {
-        found?.push(child)
-      }
-      if (!child.name && child.uuid === name) {
+      if (child.uuid === id) {
         found.push(child)
       }
     })

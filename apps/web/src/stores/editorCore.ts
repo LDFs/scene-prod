@@ -8,7 +8,7 @@ import { SceneMetadata, PropertyType } from '@scene-prod/shared';
  * 使用 shallowRef 避免 Vue 对大型 Three.js 对象做深层响应式代理（性能问题）
  */
 export const useEditorCoreStore = defineStore('editorCore', () => {
-  const sceneMetadata: Ref<SceneMetadata> = shallowRef({
+  const defaultMetaData = {
     sceneId: '',
     name: '未命名场景',
     description: '',
@@ -21,11 +21,13 @@ export const useEditorCoreStore = defineStore('editorCore', () => {
     cameraPosition: { x: 5, y: 5, z: 5 },
     cameraQuaternion: { x: 0, y: 0, z: 0, w: 0 },
     isPublished: false
-  });
+  }
+  const sceneMetadata: Ref<SceneMetadata> = ref(defaultMetaData);
   const selectedObject: Ref<THREE.Object3D | null> = shallowRef(null);  
   const sceneObjects: Ref<THREE.Object3D[]> = shallowRef([]);
   const treeVersion = ref(0)
   const stateVersion = ref(0)
+  const materialVersion = ref(0)
 
   function notifyStateUpdate() {
     stateVersion.value++;
@@ -57,9 +59,23 @@ export const useEditorCoreStore = defineStore('editorCore', () => {
   // function resetObjects(objects: THREE.Object3D[]) {
   //   sceneObjects.value = objects.map(obj => markRaw(obj))
   // }
-
+ 
   function notifyTreeUpdate() {
     treeVersion.value++;
+  }
+
+  function notifyMaterialUpdate() {
+    materialVersion.value++;
+  }
+
+  function reset() {
+    materialVersion.value = 0
+    treeVersion.value = 0
+    stateVersion.value = 0
+
+    sceneMetadata.value = defaultMetaData
+    selectedObject.value = null
+    sceneObjects.value = []
   }
 
   return {
@@ -76,5 +92,8 @@ export const useEditorCoreStore = defineStore('editorCore', () => {
     // removeObject,
     // resetObjects,
     notifyTreeUpdate,
+    materialVersion,
+    notifyMaterialUpdate,
+    reset
   };
 });

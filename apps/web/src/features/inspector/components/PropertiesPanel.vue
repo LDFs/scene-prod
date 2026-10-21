@@ -7,11 +7,11 @@
       <h4>常规 (General)</h4>
       <div class="prop-row">
         <label>名称</label>
-        <input type="text" v-model="localName" @blur="nameBlurHandler" @keyup.enter="nameBlurHandler">
+        <input type="text" :value="objectName" @change="changeName" />
       </div>
       <div class="prop-row">
         <label>ID</label>
-        <input type="text" v-model="selectedObject.uuid" :disabled="true">
+        <input type="text" :value="selectedObject.uuid" :disabled="true" />
       </div>
       <div class="prop-row">
         <label>类型</label>
@@ -19,25 +19,28 @@
       </div>
       <div class="prop-row">
         <label>可见性</label>
-        <input type="checkbox" v-model="selectedObject.visible" @change="onVisibleChange">
+        <input type="checkbox" :checked="selectedObject.visible" @change="onVisibleChange" />
       </div>
     </div>
-    
+
     <!-- Size：包围盒实际尺寸，只读 -->
     <div class="section">
       <h4>尺寸 (Size)</h4>
       <template v-if="objectSize">
         <div class="prop-row">
           <label>宽 X</label>
-          <span class="readonly-val">{{ formatLength(objectSize.x) }}</span><span class="unit">m</span>
+          <span class="readonly-val">{{ formatLength(objectSize.x) }}</span
+          ><span class="unit">m</span>
         </div>
         <div class="prop-row">
           <label>高 Y</label>
-          <span class="readonly-val">{{ formatLength(objectSize.y) }}</span><span class="unit">m</span>
+          <span class="readonly-val">{{ formatLength(objectSize.y) }}</span
+          ><span class="unit">m</span>
         </div>
         <div class="prop-row">
           <label>深 Z</label>
-          <span class="readonly-val">{{ formatLength(objectSize.z) }}</span><span class="unit">m</span>
+          <span class="readonly-val">{{ formatLength(objectSize.z) }}</span
+          ><span class="unit">m</span>
         </div>
       </template>
       <p v-else class="empty-hint">该对象不含几何体</p>
@@ -48,18 +51,27 @@
       <h4>位置 (Position)</h4>
       <div class="prop-row">
         <label>X</label>
-        <input type="number" :value="selectedObject.position.x" @focus="snapshotTransform"
-          @change="e => applyTransform('position', 'x', Number((e.target as HTMLInputElement).value))">
+        <input
+          type="number"
+          :value="selectedObject.position.x"
+          @change="(e) => changePRS('position', 'x', Number((e.target as HTMLInputElement).value))"
+        />
       </div>
       <div class="prop-row">
         <label>Y</label>
-        <input type="number" :value="selectedObject.position.y" @focus="snapshotTransform"
-          @change="e => applyTransform('position', 'y', Number((e.target as HTMLInputElement).value))">
+        <input
+          type="number"
+          :value="selectedObject.position.y"
+          @change="(e) => changePRS('position', 'y', Number((e.target as HTMLInputElement).value))"
+        />
       </div>
       <div class="prop-row">
         <label>Z</label>
-        <input type="number" :value="selectedObject.position.z" @focus="snapshotTransform"
-          @change="e => applyTransform('position', 'z', Number((e.target as HTMLInputElement).value))">
+        <input
+          type="number"
+          :value="selectedObject.position.z"
+          @change="(e) => changePRS('position', 'z', Number((e.target as HTMLInputElement).value))"
+        />
       </div>
     </div>
 
@@ -68,18 +80,27 @@
       <h4>旋转 (Rotation)</h4>
       <div class="prop-row">
         <label>X</label>
-        <input type="number" :value="toDegrees(selectedObject.rotation.x)"
-          @change="e => updateRotation('x', Number((e.target as HTMLInputElement).value))">
+        <input
+          type="number"
+          :value="toDegrees(selectedObject.rotation.x)"
+          @change="(e) => changePRS('rotation', 'x', Number((e.target as HTMLInputElement).value))"
+        />
       </div>
       <div class="prop-row">
         <label>Y</label>
-        <input type="number" :value="toDegrees(selectedObject.rotation.y)"
-          @change="e => updateRotation('y', Number((e.target as HTMLInputElement).value))">
+        <input
+          type="number"
+          :value="toDegrees(selectedObject.rotation.y)"
+          @change="(e) => changePRS('rotation', 'y', Number((e.target as HTMLInputElement).value))"
+        />
       </div>
       <div class="prop-row">
         <label>Z</label>
-        <input type="number" :value="toDegrees(selectedObject.rotation.z)"
-          @change="e => updateRotation('z', Number((e.target as HTMLInputElement).value))">
+        <input
+          type="number"
+          :value="toDegrees(selectedObject.rotation.z)"
+          @change="(e) => changePRS('rotation', 'z', Number((e.target as HTMLInputElement).value))"
+        />
       </div>
     </div>
 
@@ -88,18 +109,27 @@
       <h4>缩放 (Scale)</h4>
       <div class="prop-row">
         <label>X</label>
-        <input type="number" :value="selectedObject.scale.x" @focus="snapshotTransform"
-          @change="e => applyTransform('scale', 'x', Number((e.target as HTMLInputElement).value))">
+        <input
+          type="number"
+          :value="selectedObject.scale.x"
+          @change="(e) => changePRS('scale', 'x', Number((e.target as HTMLInputElement).value))"
+        />
       </div>
       <div class="prop-row">
         <label>Y</label>
-        <input type="number" :value="selectedObject.scale.y" @focus="snapshotTransform"
-          @change="e => applyTransform('scale', 'y', Number((e.target as HTMLInputElement).value))">
+        <input
+          type="number"
+          :value="selectedObject.scale.y"
+          @change="(e) => changePRS('scale', 'y', Number((e.target as HTMLInputElement).value))"
+        />
       </div>
       <div class="prop-row">
         <label>Z</label>
-        <input type="number" :value="selectedObject.scale.z" @focus="snapshotTransform"
-          @change="e => applyTransform('scale', 'z', Number((e.target as HTMLInputElement).value))">
+        <input
+          type="number"
+          :value="selectedObject.scale.z"
+          @change="(e) => changePRS('scale', 'z', Number((e.target as HTMLInputElement).value))"
+        />
       </div>
     </div>
 
@@ -113,26 +143,24 @@
 </template>
 
 <script setup lang="ts">
-import { useEditorCoreStore } from '@/stores/editorCore';
-import { useManagerStore } from '@/stores/manager';
-import { useHistoryStore } from '@/stores/history';
-import { storeToRefs } from 'pinia';
-import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue';
-import { PropertiyBaseCommand, TransformObjectCommand, getObjectSize } from '@scene-prod/core'
-import * as THREE from 'three';
-import { PropertyType } from '@scene-prod/shared';
+import { useEditorCoreStore } from '@/stores/editorCore'
+import { useManagerStore } from '@/stores/manager'
+import { useHistoryStore } from '@/stores/history'
+import { storeToRefs } from 'pinia'
+import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue'
+import { getObjectSize, HandleActualCommand } from '@scene-prod/core'
+import * as THREE from 'three'
 
-const editorCoreStore = useEditorCoreStore();
-const { selectedObject, stateVersion } = storeToRefs(editorCoreStore);
-const managerStore = useManagerStore();
-const historyStore = useHistoryStore();
+const editorCoreStore = useEditorCoreStore()
+const { selectedObject, stateVersion } = storeToRefs(editorCoreStore)
+const managerStore = useManagerStore()
+const historyStore = useHistoryStore()
 
-const localName = ref('')
 // 强制更新 key（用于触发 Vue 重新读取 Three.js 对象属性）
-const forceUpdateKey = ref(0);
+const forceUpdateKey = ref(0)
 // 面板内直接改缩放时不重挂 position/rotation/scale 区块（会打断正在编辑的输入框），
 // 单独用一个计数器只驱动尺寸的重算
-const sizeVersion = ref(0);
+const sizeVersion = ref(0)
 
 /**
  * 选中对象的实际尺寸（含缩放）
@@ -147,48 +175,39 @@ const objectSize = computed(() => {
 
 const formatLength = (value: number) => value.toFixed(3)
 
-watch(selectedObject, (newVal) => {
-  if (newVal) {
-    localName.value = newVal.name || '';
-  }
-}, { immediate: true })
-
 watch(stateVersion, () => {
   if (selectedObject.value) {
-    localName.value = selectedObject.value.name || ''
-    forceUpdateKey.value++   // 刷新 position/rotation/scale 的 :key
+    forceUpdateKey.value++ // 刷新 position/rotation/scale 的 :key
   }
 })
 
+const objectName = computed(() => {
+  stateVersion.value
+  return selectedObject.value ? selectedObject.value.name : ''
+})
 
-const nameBlurHandler = () => {
-  // 修改完之后，再记录新的值
-  if (selectedObject.value && selectedObject.value?.name !== localName.value) {
-    const cmd = new PropertiyBaseCommand(
-      selectedObject.value, 
-      { name: selectedObject.value.name, visible: selectedObject.value.visible }, 
-      { name: localName.value, visible: selectedObject.value.visible }
-    )
-    historyStore.execute(cmd);
-    editorCoreStore.notifyTreeUpdate();
-    selectedObject.value.userData.visibleModified = true;
+const updateObjectProperty = <K extends 'name' | 'visible'>(key: K, newValue: THREE.Object3D[K]) => {
+  const target = selectedObject.value
+  if (!(target instanceof THREE.Object3D)) return
+
+  const oldValue = target[key]
+  if (oldValue === newValue) return
+
+  const setter = (value: THREE.Object3D[K]) => {
+    target[key] = value
+    editorCoreStore.notifyStateUpdate()
   }
-  console.log('blur name-', localName.value, historyStore.undoStack);
+
+  const cmd = new HandleActualCommand<THREE.Object3D[K]>(oldValue, newValue, setter)
+  historyStore.execute(cmd)
+}
+
+const changeName = (event: Event) => {
+  updateObjectProperty('name', (event.target as HTMLInputElement).value)
 }
 
 const onVisibleChange = (event: Event) => {
-  if (!selectedObject.value) return
-  const val = (event.target as HTMLInputElement).checked;
-  const cmd = new PropertiyBaseCommand(
-    selectedObject.value, 
-    { name: selectedObject.value?.name ?? '', visible: !val }, 
-    { name: selectedObject.value?.name ?? '', visible: val }
-  )
-  historyStore.execute(cmd);
-
-  selectedObject.value.userData.visibleModified = true;
-  editorCoreStore.notifyTreeUpdate();
-  console.log('visible change-', val, historyStore.undoStack);
+  updateObjectProperty('visible', (event.target as HTMLInputElement).checked)
 }
 
 const onTransformChange = (type: 'position' | 'scale' | 'rotation') => {
@@ -197,75 +216,60 @@ const onTransformChange = (type: 'position' | 'scale' | 'rotation') => {
   }
   switch (type) {
     case 'position':
-      selectedObject.value.userData.positionModified = true;
-      break;
+      selectedObject.value.userData.positionModified = true
+      break
     case 'scale':
-      selectedObject.value.userData.scaleModified = true;
-      break;
+      selectedObject.value.userData.scaleModified = true
+      break
     case 'rotation':
-      selectedObject.value.userData.rotationModified = true;
-      break;
+      selectedObject.value.userData.rotationModified = true
+      break
   }
   managerStore.transformController?.updateSelection()
 }
 
 const handleTransformChanged = (event: Event) => {
   if (event.detail?.object === selectedObject.value) {
-    forceUpdateKey.value++;
+    forceUpdateKey.value++
   }
 }
 
 onMounted(() => {
-  window.addEventListener('transform-changed', handleTransformChanged);
-});
+  window.addEventListener('transform-changed', handleTransformChanged)
+})
 
 onBeforeUnmount(() => {
-  window.removeEventListener('transform-changed', handleTransformChanged);
-});
+  window.removeEventListener('transform-changed', handleTransformChanged)
+})
 
 const toDegrees = (radians: number) => {
-  return radians * (180 / Math.PI);
-}
-
-const updateRotation = (axis: 'x' | 'y' | 'z', value: number) => {
-  if (!selectedObject.value) return
-  snapshotTransform()
-  applyTransform('rotation', axis, toRadians(value));
+  return (radians * (180 / Math.PI)).toFixed(2)
 }
 
 const toRadians = (degrees: number) => {
-  return degrees * (Math.PI / 180);
+  return degrees * (Math.PI / 180)
 }
 
-const transformSnapshot = ref<{ position: THREE.Vector3; rotation: THREE.Euler; scale: THREE.Vector3 } | null>(null)
-const snapshotTransform = () => {
+const changePRS = (type: 'position' | 'scale' | 'rotation', axis: 'x' | 'y' | 'z', value: number) => {
   if (!selectedObject.value) return
-  transformSnapshot.value = {
-    position: selectedObject.value.position.clone(),
-    rotation: selectedObject.value.rotation.clone(),
-    scale: selectedObject.value.scale.clone(),
-  }
-}
 
-const applyTransform = (type: 'position' | 'scale' | 'rotation', axis: 'x' | 'y' | 'z', value: number) => {
-  if (!selectedObject.value || !transformSnapshot.value) return
-  selectedObject.value[type][axis] = value
-  // 构造 old/new state，提交 Command
-  const newState = {
-    position: selectedObject.value.position.clone(),
-    rotation: selectedObject.value.rotation.clone(),
-    scale: selectedObject.value.scale.clone(),
+  const oldValue = selectedObject.value[type][axis]
+  if (type === 'rotation') {
+    value = toRadians(value)
   }
-  const cmd = new TransformObjectCommand(
-    selectedObject.value,
-    transformSnapshot.value,   // focus 时记录的快照
-    newState,
-  )
-  historyStore.pushWithoutExecute(cmd)
-  onTransformChange(type)
-  sizeVersion.value++
-}
+  const object = selectedObject.value
+  const newValue = value
+  const setter = (value: number) => {
+    if (!object) return
+    if (object instanceof THREE.Object3D) {
+      object[type][axis] = value
+      useEditorCoreStore().notifyStateUpdate()
+    }
+  }
 
+  const cmd = new HandleActualCommand(oldValue, newValue, setter)
+  historyStore.execute(cmd)
+}
 </script>
 
 <style scoped>
@@ -332,7 +336,7 @@ input:focus {
   outline: none;
 }
 
-input[type="color"] {
+input[type='color'] {
   padding: 0;
   height: 24px;
   cursor: pointer;

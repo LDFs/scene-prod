@@ -130,6 +130,10 @@ onMounted(() => {
 
 onUnmounted(() => {
   window.removeEventListener('keydown', handleKeydown)
+
+  // 退出编辑器后，销毁指令历史
+  historyStore.dispose()
+  editorCoreStore.reset()
 })
 </script>
 
