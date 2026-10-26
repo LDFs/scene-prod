@@ -1,5 +1,6 @@
 export * from './src/types/index'
 export * from './src/schema'
+export * from './src/propertyDefinitions'
 export * from './src/constants'
 export * from './src/objFormat'
 export * from './src/gltfFormat'

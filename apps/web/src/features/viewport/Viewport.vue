@@ -84,8 +84,13 @@ const onDrop = async (event: DragEvent) => {
   const position = sceneManager.getPlacementPosition(event.clientX, event.clientY)
   sceneManager.placeObjectAt(object, position)
 
-  // 通过 command 来控制添加、撤销等操作
-  historyStore.execute(new AddObjectCommand(sceneManager, object, true))
+  const hooks = {
+    onSceneChange: () => {
+      editorCoreStore.notifyStateUpdate()
+      editorCoreStore.notifyTreeUpdate()
+    }
+  }
+  historyStore.execute(new AddObjectCommand(sceneManager, object, true, hooks))
 }
 
 onMounted(async () => {

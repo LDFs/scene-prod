@@ -507,16 +507,6 @@ export class SceneManager {
     return found
   }
 
-  findObjectById(id: string): Array<THREE.Object3D> {
-    let found: Array<THREE.Object3D> = []
-    this.scene.traverse((child) => {
-      if (child.uuid === id) {
-        found.push(child)
-      }
-    })
-    return found
-  }
-
   clearScene() {
     this.selectionBoxHelper.detach()
     this.objects.forEach((object) => {

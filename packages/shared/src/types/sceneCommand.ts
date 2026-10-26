@@ -3,8 +3,10 @@ export type {
   AISceneResponse,
   CreateObjectCommand,
   DeleteObjectCommand,
-  TransformObjectCommand,
-  ModifyMaterialCommand,
-  ModifyPropertyCommand,
   AddModelCommand,
+  SetPropertyCommand,
+  ObjectPropertyName,
+  MaterialPropertyName,
+  ScenePropertyName,
+  MaterialPropertyTarget,
 } from '../schema'

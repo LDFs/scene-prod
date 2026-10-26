@@ -1,7 +1,7 @@
 // TODO: 用 zod 定义与 types.ts 对应的运行时校验 schema
 // zod 主要是用来校验数据结构的，比如传入的参数是否符合预期，避免运行时出错。
-import { cameraPosition } from 'three/tsl'
 import { z } from 'zod'
+import { PropertyDefinitions } from './propertyDefinitions'
 
 export const ProjectSchema = z.object({
   id: z.string(),
@@ -74,8 +74,43 @@ export const SceneDataSchema = z.object({
 })
 
 // ── Scene Command Schemas ──────────────────────────────────────────────────────
-// 与 packages/core/src/commands/CommandFactory.ts 中各 Command 类一一对应。
-// 前端执行器根据 commandType 分派到对应的 Command 类，AI 只需填充这些字段。
+// 描述 AI 的操作意图；属性修改由执行器转换为 HandleActualCommand。
+// AI 只提供目标 ID 和新值，旧值在执行时读取，不暴露任意属性路径或 setter。
+
+/** 从字段表生成判别联合，保留每个 property 与 value 的类型对应关系。 */
+function propertyAssignmentSchema<S extends Record<string, { schema: z.ZodTypeAny }>>(definitions: S) {
+  type Option = {
+    [K in keyof S & string]: z.ZodObject<{ property: z.ZodLiteral<K>; value: S[K]['schema'] }>
+  }[keyof S & string]
+  const options = Object.entries(definitions).map(([property, definition]) =>
+    z.object({ property: z.literal(property), value: definition.schema }),
+  )
+  // Object.entries 会擦除键的字面量类型；每个分支均由同一字段表的键和值构建。
+  return z.discriminatedUnion('property', options as unknown as [Option, ...Option[]])
+}
+
+const ObjectPropertyTargetSchema = z.object({
+  scope: z.literal('object'),
+  objectId: z.string().min(1),
+}).strict()
+
+const MaterialPropertyTargetSchema = z.object({
+  scope: z.literal('material'),
+  objectId: z.string().min(1),
+  materialIndex: z.union([z.number().int().nonnegative(), z.literal('all')]).default(0),
+  includeDescendants: z.boolean().default(false),
+}).strict()
+
+const ScenePropertyTargetSchema = z.object({ scope: z.literal('scene') }).strict()
+
+export const SetPropertyCommandSchema = z.union([
+  z.object({ commandType: z.literal('set_property'), target: ObjectPropertyTargetSchema })
+    .and(propertyAssignmentSchema(PropertyDefinitions.object)),
+  z.object({ commandType: z.literal('set_property'), target: MaterialPropertyTargetSchema })
+    .and(propertyAssignmentSchema(PropertyDefinitions.material)),
+  z.object({ commandType: z.literal('set_property'), target: ScenePropertyTargetSchema })
+    .and(propertyAssignmentSchema(PropertyDefinitions.scene)),
+])
 
 const CreateObjectCommandSchema = z.object({
   commandType: z.literal('create'),
@@ -103,40 +138,8 @@ const CreateObjectCommandSchema = z.object({
 
 const DeleteObjectCommandSchema = z.object({
   commandType: z.literal('delete'),
-  // 对应 DeleteObjectCommand：按名称定位对象
-  name: z.string(),
-})
-
-const TransformObjectCommandSchema = z.object({
-  commandType: z.literal('transform'),
-  // 对应 TransformObjectCommand：executor 负责读取旧状态，AI 只给新状态
-  name: z.string(),
-  position: Vec3Schema.optional(), // 绝对坐标，不填则不改
-  rotation: Vec3Schema.optional(), // 绝对弧度，不填则不改
-  scale: Vec3Schema.optional(),    // 绝对缩放，不填则不改
-})
-
-const ModifyMaterialCommandSchema = z.object({
-  commandType: z.literal('modify_material'),
-  // 对应 MaterialObjectCommand：只列出 AI 常用子集，executor 填充其余字段默认值
-  name: z.string(),
-  color: z.string().optional(),
-  roughness: z.number().min(0).max(1).optional(),
-  metalness: z.number().min(0).max(1).optional(),
-  opacity: z.number().min(0).max(1).optional(),
-  emissiveColor: z.string().optional(),
-  emissiveIntensity: z.number().min(0).optional(),
-  wireframe: z.boolean().optional(),
-  flatShading: z.boolean().optional(),
-  transparent: z.boolean().optional(),
-})
-
-const ModifyPropertyCommandSchema = z.object({
-  commandType: z.literal('modify_property'),
-  // 对应 PropertiyBaseCommand：name/visible
-  name: z.string(),
-  newName: z.string().optional(),
-  visible: z.boolean().optional(),
+  name: z.string().optional(),
+  id: z.string().min(1),
 })
 
 const AddModelCommandSchema = z.object({
@@ -151,14 +154,13 @@ const AddModelCommandSchema = z.object({
   allowOverlap: z.boolean().default(false),
 })
 
-export const SceneCommandSchema = z.discriminatedUnion('commandType', [
+const ObjectLifecycleCommandSchema = z.discriminatedUnion('commandType', [
   CreateObjectCommandSchema,
   DeleteObjectCommandSchema,
-  TransformObjectCommandSchema,
-  ModifyMaterialCommandSchema,
-  ModifyPropertyCommandSchema,
   AddModelCommandSchema,
 ])
+
+export const SceneCommandSchema = z.union([SetPropertyCommandSchema, ObjectLifecycleCommandSchema])
 
 /** AI 返回的完整结构：自然语言说明 + 命令列表 */
 export const AISceneResponseSchema = z.object({
@@ -171,8 +173,10 @@ export type SceneCommand = z.infer<typeof SceneCommandSchema>
 export type AISceneResponse = z.infer<typeof AISceneResponseSchema>
 export type CreateObjectCommand = z.infer<typeof CreateObjectCommandSchema>
 export type DeleteObjectCommand = z.infer<typeof DeleteObjectCommandSchema>
-export type TransformObjectCommand = z.infer<typeof TransformObjectCommandSchema>
-export type ModifyMaterialCommand = z.infer<typeof ModifyMaterialCommandSchema>
-export type ModifyPropertyCommand = z.infer<typeof ModifyPropertyCommandSchema>
 export type AddModelCommand = z.infer<typeof AddModelCommandSchema>
+export type SetPropertyCommand = z.infer<typeof SetPropertyCommandSchema>
+export type ObjectPropertyName = keyof typeof PropertyDefinitions.object
+export type MaterialPropertyName = keyof typeof PropertyDefinitions.material
+export type ScenePropertyName = keyof typeof PropertyDefinitions.scene
+export type MaterialPropertyTarget = z.infer<typeof MaterialPropertyTargetSchema>
 export type vec3Type = z.infer<typeof Vec3Schema>

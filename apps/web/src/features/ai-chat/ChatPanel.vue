@@ -48,19 +48,27 @@ import { AISceneResponseSchema } from '@scene-prod/shared/schema'
 import { SceneCommand, AssetWithId } from '@scene-prod/shared'
 import { fromAICommand, ActualCommand, BatchCommand, AddObjectCommand } from '@scene-prod/core'
 import { useHistoryStore } from '@/stores/history'
+import { useEditorCoreStore } from '@/stores/editorCore'
 import { getAssets, getModelUrl } from '@/services/asset'
 import { extractJson } from '@/utils/handleAi'
 
 const managerStore = useManagerStore()
 const historyStore = useHistoryStore()
+const editorCoreStore = useEditorCoreStore()
 
 // 模型库清单：用于告知 AI 有哪些可用模型，并在 add_model 时解析为具体资源
 const libraryModels = ref<AssetWithId[]>([])
 
 async function loadLibraryModels() {
   try {
-    const { assets } = await getAssets('model')
-    libraryModels.value = assets
+    const models: AssetWithId[] = []
+    for (let page = 1; ; page++) {
+      const result = await getAssets({ type: 'model', page, pageSize: 100 })
+      if (!result.success) throw new Error(result.message)
+      models.push(...result.assets)
+      if (page >= result.pagination.totalPages || result.assets.length === 0) break
+    }
+    libraryModels.value = models
   } catch (error) {
     console.error('加载模型库失败:', error)
   }
@@ -70,16 +78,24 @@ onMounted(loadLibraryModels)
 
 function getSystemMessages(): ChatMessage[] {
   const objects = managerStore.sceneManager ? [...managerStore.sceneManager.objects] : []
-  return [{ role: 'system', content: buildSceneSystemPrompt(objects, libraryModels.value) }]
+  return [{ role: 'system', content: buildSceneSystemPrompt(objects, libraryModels.value, editorCoreStore.sceneMetadata) }]
 }
 
 /**
  * 把单条 AI 命令转成可执行命令。add_model 需异步加载 GLTF，故单独处理；
- * 其余命令复用同步的 fromAICommand。无法执行时返回 null。
+ * 其余命令交给 fromAICommand；属性旧值在批处理实际执行到该命令时读取。
  */
 async function resolveCommand(cmd: SceneCommand): Promise<ActualCommand | null> {
   if (cmd.commandType !== 'add_model') {
-    return fromAICommand(cmd, managerStore.sceneManager!)
+    return fromAICommand(cmd, managerStore.sceneManager!, {
+      onObjectChange: () => editorCoreStore.notifyStateUpdate(),
+      onMaterialChange: () => editorCoreStore.notifyMaterialUpdate(),
+      getSceneMetadata: () => editorCoreStore.sceneMetadata,
+      onSceneChange: () => {
+        editorCoreStore.notifyStateUpdate()
+        editorCoreStore.notifyTreeUpdate()
+      },
+    })
   }
 
   const persistenceManager = managerStore.persistenceManager
@@ -107,13 +123,26 @@ async function resolveCommand(cmd: SceneCommand): Promise<ActualCommand | null> 
     object.rotation.set(cmd.rotation.x ?? 0, cmd.rotation.y ?? 0, cmd.rotation.z ?? 0)
   }
 
-  return new AddObjectCommand(managerStore.sceneManager!, object, cmd.allowOverlap)
+  return new AddObjectCommand(managerStore.sceneManager!, object, cmd.allowOverlap, {
+    onSceneChange: () => {
+      editorCoreStore.notifyStateUpdate()
+      editorCoreStore.notifyTreeUpdate()
+    }
+  })
 }
 
 const messages = ref<ChatMessage[]>([])
 const input = ref('')
 const loading = ref(false)
 const listRef = ref<HTMLDivElement | null>(null)
+
+function commandLabel(cmd: SceneCommand): string {
+  if (cmd.commandType === 'set_property') {
+    const target = cmd.target.scope === 'scene' ? '场景' : cmd.target.objectId
+    return `${target}.${cmd.property}`
+  }
+  return cmd.commandType === 'add_model' ? cmd.modelName : cmd.name ?? ('id' in cmd ? cmd.id : '')
+}
 
 async function scrollToBottom() {
   await nextTick()
@@ -135,7 +164,6 @@ async function send() {
   if (libraryModels.value.length === 0) await loadLibraryModels()
 
   const result = await chatWithAI([...getSystemMessages(), ...messages.value.filter((m) => !m.skipContext)])
-  loading.value = false
 
   if (result.success) {
     try {
@@ -148,13 +176,13 @@ async function send() {
           try {
             const c = await resolveCommand(cmd)
             if (!c) {
-              const label = cmd.commandType === 'add_model' ? cmd.modelName : cmd.name
+              const label = commandLabel(cmd)
               failed.push(cmd.commandType + ':' + label)
             }
             return c
           } catch (error) {
             console.error('解析指令失败:', cmd, error)
-            const label = cmd.commandType === 'add_model' ? cmd.modelName : cmd.name
+            const label = commandLabel(cmd)
             failed.push(cmd.commandType + ':' + label)
             return null
           }
@@ -172,9 +200,10 @@ async function send() {
         const explanation = notes.length > 0 ? `${parsed.explanation}\n\n⚠️ ${notes.join('\n')}` : parsed.explanation
 
         const batchErrors = batch.getErrors()
-        const errorText = batchErrors.length > 0 ? `\n${batchErrors}条操作执行失败` : ''
+        const errorText = batchErrors.length > 0 ? `\n${batchErrors.length}条操作执行失败` : ''
         batchErrors.forEach((item) => {
-          failed.push(item.name)
+          const reason = item.error instanceof Error ? item.error.message : String(item.error)
+          failed.push(`${item.name}（${reason}）`)
         })
 
         messages.value.push({ role: 'assistant', content: explanation + errorText })
@@ -197,6 +226,7 @@ async function send() {
   } else {
     messages.value.push({ role: 'assistant', content: `出错了：${result.message}` })
   }
+  loading.value = false
   await scrollToBottom()
 }
 

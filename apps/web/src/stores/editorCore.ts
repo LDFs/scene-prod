@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia';
 import { shallowRef, Ref, ref, markRaw } from 'vue';
 import * as THREE from 'three';
-import { SceneMetadata, PropertyType } from '@scene-prod/shared';
+import { SceneMetadata } from '@scene-prod/shared';
 
 /**
  * 存储编辑器核心 manager 实例

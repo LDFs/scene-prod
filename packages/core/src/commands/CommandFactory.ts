@@ -1,13 +1,19 @@
 import * as THREE from 'three'
-import { ActualCommand, AddCommand, DeleteCommand, MaterialCommand, TransformCommand } from './Command'
-import { SceneManager } from '../SceneManager'
-import { MaterialState, ObjectState, PropertyType, SceneCommand, SceneMetadata } from '@scene-prod/shared'
+import type { ActualCommand, AddCommand, DeleteCommand, TransformCommand } from './Command'
+import type { SceneManager } from '../SceneManager'
+import type {
+  ObjectState,
+  SceneCommand,
+  CreateObjectCommand as AICreateObjectCommand,
+  DeleteObjectCommand as AIDeleteObjectCommand,
+} from '@scene-prod/shared'
 import { findFreePosition } from '../utils/sceneTools'
-import { setObjectMaterial } from '../utils/objectFactory'
+import { convertSetPropertyCommand, type AICommandHooks } from './PropertyCommandHandlers'
 
-/**
- * 操作指令集中处理，通过回调函数来具体执行
- */
+export { BatchCommand } from './BatchCommand'
+export type { AICommandHooks } from './PropertyCommandHandlers'
+
+/** 统一执行新值、撤销到旧值；领域规则由属性处理器提供的 setter 负责。 */
 export class HandleActualCommand<T> implements ActualCommand {
   constructor(
     private oldValue: T,
@@ -18,9 +24,11 @@ export class HandleActualCommand<T> implements ActualCommand {
   execute(): void {
     this.setter(this.newValue)
   }
+
   undo(): void {
     this.setter(this.oldValue)
   }
+
   redo(): void {
     this.setter(this.newValue)
   }
@@ -36,14 +44,19 @@ export class AddObjectCommand implements AddCommand {
   private isFirstCreate = true
   adjustmentNote = ''
 
-  constructor(sceneManager: SceneManager, object: THREE.Object3D, allowOverlap = false) {
+  constructor(
+    sceneManager: SceneManager,
+    object: THREE.Object3D,
+    allowOverlap = false,
+    private hooks: AICommandHooks = {},
+  ) {
     this.sceneManager = sceneManager
     this.object = object
     this.allowOverlap = allowOverlap
   }
   execute(): void {
     this.sceneManager.addObject2Scene(this.object)
-
+    this.hooks.onSceneChange?.()
     if (!this.isFirstCreate || this.allowOverlap) return
     const originalPos = this.object.position.clone()
     findFreePosition(this.object as THREE.Mesh, this.sceneManager.scene, originalPos)
@@ -63,9 +76,11 @@ export class AddObjectCommand implements AddCommand {
   }
   undo(): void {
     this.sceneManager.removeObjectFromScene(this.object)
+    this.hooks.onSceneChange?.()
   }
   redo(): void {
     this.sceneManager.addObject2Scene(this.object)
+    this.hooks.onSceneChange?.()
   }
 }
 
@@ -75,18 +90,25 @@ export class AddObjectCommand implements AddCommand {
 export class DeleteObjectCommand implements DeleteCommand {
   private sceneManager: SceneManager
   private object: THREE.Object3D
-  constructor(sceneManager: SceneManager, object: THREE.Object3D) {
+  constructor(
+    sceneManager: SceneManager,
+    object: THREE.Object3D,
+    private hooks: AICommandHooks = {},
+  ) {
     this.sceneManager = sceneManager
     this.object = object
   }
   execute(): void {
     this.sceneManager.removeObjectFromScene(this.object)
+    this.hooks.onSceneChange?.()
   }
   undo(): void {
     this.sceneManager.addObject2Scene(this.object)
+    this.hooks.onSceneChange?.()
   }
   redo(): void {
     this.sceneManager.removeObjectFromScene(this.object)
+    this.hooks.onSceneChange?.()
   }
 }
 
@@ -133,89 +155,14 @@ export class TransformObjectCommand implements TransformCommand {
   }
 }
 
-/**
- * 材质修改指令
- */
-export class MaterialObjectCommand implements MaterialCommand {
-  private object: THREE.Object3D
-  private oldState: MaterialState
-  private newState: MaterialState
-  constructor(object: THREE.Object3D, oldState: MaterialState, newState: MaterialState) {
-    this.object = object
-    this.oldState = oldState
-    this.newState = newState
-  }
-  execute(): void {
-    if (this.object instanceof THREE.Mesh && this.object.material) {
-      this.object.material.color.copy(this.newState.color)
-      this.object.material.roughness = this.newState.roughness
-      this.object.material.metalness = this.newState.metalness
-      this.object.material.emissive.copy(this.newState.emissive)
-      this.object.material.emissiveIntensity = this.newState.emissiveIntensity
-      this.object.material.opacity = this.newState.opacity
-      this.object.material.alphaTest = this.newState.alphaTest
-      this.object.material.blending = this.newState.blending
-      this.object.material.side = this.newState.side
-      this.object.material.transparent = this.newState.transparent
-      this.object.material.depthTest = this.newState.depthTest
-      this.object.material.depthWrite = this.newState.depthWrite
-      this.object.material.vertexColors = this.newState.vertexColors
-      this.object.material.wireframe = this.newState.wireframe
-      this.object.material.flatShading = this.newState.flatShading
-    }
-  }
-  undo(): void {
-    if (this.object instanceof THREE.Mesh && this.object.material) {
-      this.object.material.color.copy(this.oldState.color)
-      this.object.material.roughness = this.oldState.roughness
-      this.object.material.metalness = this.oldState.metalness
-      this.object.material.emissive.copy(this.oldState.emissive)
-      this.object.material.emissiveIntensity = this.oldState.emissiveIntensity
-      this.object.material.opacity = this.oldState.opacity
-      this.object.material.alphaTest = this.oldState.alphaTest
-      this.object.material.blending = this.oldState.blending
-      this.object.material.side = this.oldState.side
-      this.object.material.transparent = this.oldState.transparent
-      this.object.material.depthTest = this.oldState.depthTest
-      this.object.material.depthWrite = this.oldState.depthWrite
-      this.object.material.vertexColors = this.oldState.vertexColors
-      this.object.material.wireframe = this.oldState.wireframe
-      this.object.material.flatShading = this.oldState.flatShading
-
-      this.object.material.needsUpdate = true
-    }
-  }
-  redo(): void {
-    if (this.object instanceof THREE.Mesh && this.object.material) {
-      this.object.material.color.copy(this.newState.color)
-      this.object.material.roughness = this.newState.roughness
-      this.object.material.metalness = this.newState.metalness
-      this.object.material.emissive.copy(this.newState.emissive)
-      this.object.material.emissiveIntensity = this.newState.emissiveIntensity
-      this.object.material.opacity = this.newState.opacity
-      this.object.material.alphaTest = this.newState.alphaTest
-      this.object.material.blending = this.newState.blending
-      this.object.material.side = this.newState.side
-      this.object.material.transparent = this.newState.transparent
-      this.object.material.depthTest = this.newState.depthTest
-      this.object.material.depthWrite = this.newState.depthWrite
-      this.object.material.vertexColors = this.newState.vertexColors
-      this.object.material.wireframe = this.newState.wireframe
-      this.object.material.flatShading = this.newState.flatShading
-      this.object.material.needsUpdate = true
-    }
-  }
-}
-
 /** 可拖拽替换的贴图槽位 */
 export type MaterialMapSlot = 'map' | 'normalMap'
 
 /**
  * 贴图替换指令（从资源库拖图到材质面板触发）
  *
- * 没有并进 MaterialObjectCommand：那条链路的 oldState/newState 是整份材质快照，
- * 被 AI 的 setObjectMaterial 和面板的 mat.clone() 共用。把贴图并进去后，
- * "撤销一次改颜色"会连带把贴图回滚到那次快照的状态，交叉撤销的语义就乱了。
+ * 独立记录单个贴图槽位，避免与颜色等属性的撤销互相覆盖。
+ * 保留供尚未迁移到 HandleActualCommand 的调用方使用。
  */
 export class MaterialMapCommand implements ActualCommand {
   constructor(
@@ -246,254 +193,91 @@ export class MaterialMapCommand implements ActualCommand {
   }
 }
 
-export class PropertiyBaseCommand implements ActualCommand {
-  private object: THREE.Object3D | null
-  private oldProperty: PropertyType
-  private newProperty: PropertyType
-  constructor(object: THREE.Object3D | null, oldProperty: PropertyType, newProperty: PropertyType) {
-    // 假设指令里面的 object 记录的是被修改了值的对象，而不是被选择的对象
-    this.object = object
-    this.oldProperty = oldProperty
-    this.newProperty = newProperty
-  }
-  getObject() {
-    return this.object
-  }
-  setObject(object: THREE.Object3D | null) {
-    this.object = object
-  }
-  setOldProperty(property: PropertyType) {
-    this.oldProperty = property
-  }
-  setNewProperty(property: PropertyType) {
-    this.newProperty = property
-  }
-  getOldProperty() {
-    return this.oldProperty
-  }
-  getNewProperty() {
-    return this.newProperty
-  }
-  execute(): void {
-    if (!this.object) return
-    this.object.name = this.newProperty.name
-    this.object.visible = this.newProperty.visible
-  }
-  undo(): void {
-    if (!this.object) return
-    this.object.name = this.oldProperty.name
-    this.object.visible = this.oldProperty.visible
-  }
-  redo(): void {
-    if (!this.object) return
-    this.object.name = this.newProperty.name
-    this.object.visible = this.newProperty.visible
-  }
-}
+/** 批量命令会预先解析；执行到本条时才定位对象、读取旧值，重做复用原快照。 */
+class DeferredAICommand implements ActualCommand {
+  private command: ActualCommand | null = null
 
-export class SceneSettingCommand implements ActualCommand {
-  private oldState: SceneMetadata
-  private newState: SceneMetadata
-  private sceneManager: SceneManager
-  private sceneData: SceneMetadata
-
-  constructor(sceneManager: SceneManager, oldState: SceneMetadata, newState: SceneMetadata, sceneData: SceneMetadata) {
-    this.sceneManager = sceneManager
-    this.oldState = oldState
-    this.newState = newState
-    this.sceneData = sceneData
-  }
-  execute(): void {
-    this.sceneData.name = this.newState.name
-    this.sceneData.description = this.newState.description
-    this.sceneData.cameraFar = this.newState.cameraFar
-    this.sceneData.backgroundColor = this.newState.backgroundColor
-    this.sceneData.ambientIntensity = this.newState.ambientIntensity
-    this.sceneData.lastModified = new Date()
-    this.sceneData.environmentUrl = this.newState.environmentUrl
-
-    this.sceneManager.setCameraFar(this.newState.cameraFar)
-    this.sceneManager.setAmbientLight(this.newState.backgroundColor, this.newState.ambientIntensity)
-    this.newState.environmentUrl && this.sceneManager.loadEnvironment(this.newState.environmentUrl)
-  }
-  getSceneMetadata() {
-    return this.sceneData
-  }
-  undo(): void {
-    this.sceneData.name = this.oldState.name
-    this.sceneData.description = this.oldState.description
-    this.sceneData.cameraFar = this.oldState.cameraFar
-    this.sceneData.backgroundColor = this.oldState.backgroundColor
-    this.sceneData.ambientIntensity = this.oldState.ambientIntensity
-    this.sceneData.lastModified = new Date()
-    this.sceneData.environmentUrl = this.oldState.environmentUrl
-
-    this.sceneManager.setCameraFar(this.oldState.cameraFar)
-    this.sceneManager.setAmbientLight(this.oldState.backgroundColor, this.oldState.ambientIntensity)
-    this.oldState.environmentUrl && this.sceneManager.loadEnvironment(this.oldState.environmentUrl)
-  }
-  redo(): void {
-    this.sceneData.name = this.newState.name
-    this.sceneData.description = this.newState.description
-    this.sceneData.cameraFar = this.newState.cameraFar
-    this.sceneData.backgroundColor = this.newState.backgroundColor
-    this.sceneData.ambientIntensity = this.newState.ambientIntensity
-    this.sceneData.lastModified = new Date()
-    this.sceneData.environmentUrl = this.newState.environmentUrl
-
-    this.sceneManager.setCameraFar(this.newState.cameraFar)
-    this.sceneManager.setAmbientLight(this.newState.backgroundColor, this.newState.ambientIntensity)
-    this.newState.environmentUrl && this.sceneManager.loadEnvironment(this.newState.environmentUrl)
-  }
-}
-
-/**
- * 将 AI 结果生成具体的指令
- */
-export function fromAICommand(cmd: SceneCommand, sceneManager: SceneManager): ActualCommand | null {
-  switch (cmd.commandType) {
-    // 创建基础几何体
-    case 'create': {
-      let geometry: THREE.BufferGeometry = new THREE.BoxGeometry(cmd.width ?? 1, cmd.height ?? 1, cmd.depth ?? 1)
-      if (cmd.objectType === 'sphere') {
-        geometry = new THREE.SphereGeometry(cmd.radius ?? 0.2, 24, 24)
-      }
-      const material = new THREE.MeshStandardMaterial({
-        color: cmd.color,
-        roughness: cmd.roughness,
-        metalness: cmd.metalness,
-        opacity: cmd.opacity,
-        wireframe: cmd.wireframe,
-      })
-      const mesh = new THREE.Mesh(geometry, material)
-      mesh.name = cmd.name
-      mesh.position.set(cmd.position?.x ?? 1, cmd.position?.y ?? 1, cmd.position?.z ?? 1)
-      mesh.rotation.set(cmd.rotation?.x ?? 0, cmd.rotation?.y ?? 0, cmd.rotation?.z ?? 0)
-      mesh.scale.set(cmd.scale.x ?? 1, cmd.scale.y ?? 1, cmd.scale.z ?? 1)
-      mesh.userData.isModelRoot = true // 标记根节点
-
-      return new AddObjectCommand(sceneManager, mesh, cmd.allowOverlap)
-    }
-    case 'delete': {
-      const objects = sceneManager.findObjectById(cmd.name)
-      if (objects.length > 0) {
-        return new DeleteObjectCommand(sceneManager, objects[0])
-      }
-      return null
-    }
-    case 'transform': {
-      const objects = sceneManager.findObjectById(cmd.id)
-      if (!objects || objects.length === 0) return null
-      const object = objects[0]
-      const oldState: ObjectState = {
-        position: object.position.clone(),
-        rotation: object.rotation.clone(),
-        scale: object.scale.clone(),
-      }
-      const newState: ObjectState = {
-        position: new THREE.Vector3(
-          cmd.position?.x ?? oldState.position.x,
-          cmd.position?.y ?? oldState.position.y,
-          cmd.position?.z ?? oldState.position.z,
-        ),
-        rotation: new THREE.Euler(
-          cmd.rotation?.x ?? oldState.rotation.x,
-          cmd.rotation?.y ?? oldState.rotation.y,
-          cmd.rotation?.z ?? oldState.rotation.z,
-        ),
-        scale: new THREE.Vector3(
-          cmd.scale?.x ?? oldState.scale.x,
-          cmd.scale?.y ?? oldState.scale.y,
-          cmd.scale?.z ?? oldState.scale.z,
-        ),
-      }
-      return new TransformObjectCommand(object, oldState, newState)
-    }
-    case 'modify_material': {
-      const objects = sceneManager.findObjectById(cmd.id)
-      if (!objects || objects.length === 0) return null
-      const object = objects[0]
-      const meshes: THREE.Mesh[] = []
-      if (object instanceof THREE.Group) {
-        object.traverse((child) => {
-          if (child instanceof THREE.Mesh && child.material) meshes.push(child)
-        })
-        if (meshes.length === 0) return null
-      } else if (object instanceof THREE.Mesh && object.material) {
-        meshes.push(object)
-      } else return null
-
-      const cmds = meshes.map((mesh) => {
-        const { oldState, newState } = setObjectMaterial(mesh, cmd)
-        return new MaterialObjectCommand(mesh, oldState, newState)
-      })
-      // 单网格直接返回，多网格用 BatchCommand 合并（撤销时整体回滚）
-      return cmds.length === 1 ? cmds[0] : new BatchCommand(cmds, `修改「${cmd.name}」材质`)
-    }
-    case 'modify_property': {
-      const objects = sceneManager.findObjectById(cmd.id)
-      if (!objects || objects.length === 0) return null
-      const object = objects[0]
-      const oldProperty: PropertyType = {
-        name: object.name,
-        visible: object.visible,
-      }
-      const newProperty: PropertyType = {
-        name: cmd.newName ?? object.name,
-        visible: cmd.visible ?? object.visible,
-      }
-      return new PropertiyBaseCommand(object, oldProperty, newProperty)
-    }
-  }
-
-  return null
-}
-
-export class BatchCommand implements ActualCommand {
-  // 记录本次真正 execute/redo 成功的指令,undo 只回滚这些
-  private executed: ActualCommand[] = []
-  private errors: { cmd: ActualCommand; error: unknown; name: string }[] = []
   constructor(
-    private cmds: ActualCommand[],
     public label: string,
+    private createCommand: () => ActualCommand,
   ) {}
+
   execute() {
-    this.executed = []
-    this.errors = []
-    for (const c of this.cmds) {
-      try {
-        c.execute()
-        this.executed.push(c)
-      } catch (error) {
-        this.errors.push({ cmd: c, error, name: (c as any).constructor.name })
-        console.error(`[BatchCommand] 指令执行失败,已跳过:`, error)
-      }
-    }
+    this.command ??= this.createCommand()
+    this.command.execute()
   }
+
   undo() {
-    ;[...this.executed].reverse().forEach((c) => c.undo())
+    this.command?.undo()
   }
+
   redo() {
-    this.executed = []
-    for (const c of this.cmds) {
-      try {
-        c.execute() // 或 c.redo(),取决于指令语义
-        this.executed.push(c)
-      } catch (error) {
-        console.error(`[BatchCommand] 重做失败,已跳过:`, error)
-      }
+    if (this.command) this.command.redo()
+    else this.execute()
+  }
+}
+
+function convertDeleteCommand(
+  cmd: AIDeleteObjectCommand,
+  sceneManager: SceneManager,
+  hooks: AICommandHooks = {},
+): ActualCommand {
+  return new DeferredAICommand('delete:' + (cmd.name || cmd.id), () => {
+    const object = sceneManager.findObjectByUuid(cmd.id)
+    if (!object) throw new Error(`找不到对象 ID：${cmd.id}`)
+    return new DeleteObjectCommand(sceneManager, object, hooks)
+  })
+}
+
+function convertCreateCommand(
+  cmd: AICreateObjectCommand,
+  sceneManager: SceneManager,
+  hooks: AICommandHooks = {},
+): ActualCommand {
+  const geometry =
+    cmd.objectType === 'sphere'
+      ? new THREE.SphereGeometry(cmd.radius ?? 0.2, 24, 24)
+      : new THREE.BoxGeometry(cmd.width ?? 1, cmd.height ?? 1, cmd.depth ?? 1)
+  const material = new THREE.MeshStandardMaterial({
+    color: cmd.color,
+    roughness: cmd.roughness,
+    metalness: cmd.metalness,
+    opacity: cmd.opacity,
+    transparent: cmd.opacity < 1,
+    wireframe: cmd.wireframe,
+  })
+  const mesh = new THREE.Mesh(geometry, material)
+  mesh.name = cmd.name
+  mesh.position.set(cmd.position.x ?? 0, cmd.position.y ?? 0, cmd.position.z ?? 0)
+  mesh.rotation.set(cmd.rotation.x ?? 0, cmd.rotation.y ?? 0, cmd.rotation.z ?? 0)
+  mesh.scale.set(cmd.scale.x ?? 1, cmd.scale.y ?? 1, cmd.scale.z ?? 1)
+  mesh.userData.isModelRoot = true
+  return new AddObjectCommand(sceneManager, mesh, cmd.allowOverlap, hooks)
+}
+
+/** 仅分发 AI 意图；add_model 由前端异步资源加载器处理。 */
+export function fromAICommand(
+  cmd: SceneCommand,
+  sceneManager: SceneManager,
+  hooks: AICommandHooks = {},
+): ActualCommand | null {
+  switch (cmd.commandType) {
+    case 'set_property': {
+      const target = cmd.target.scope === 'scene' ? 'scene' : cmd.target.objectId
+      return new DeferredAICommand(`set_property:${target}:${cmd.property}`, () =>
+        convertSetPropertyCommand(
+          cmd,
+          sceneManager,
+          hooks,
+          (oldValue, newValue, setter) => new HandleActualCommand(oldValue, newValue, setter),
+        ),
+      )
     }
-  }
-
-  // 收集所有 AddObjectCommand 的调整信息
-  getAdjustmentNotes(): string[] {
-    return this.cmds
-      .filter((c): c is AddObjectCommand => c instanceof AddObjectCommand)
-      .map((c) => c.adjustmentNote)
-      .filter(Boolean) as string[]
-  }
-
-  getErrors(): { cmd: ActualCommand; error: unknown; name: string }[] {
-    return this.errors
+    case 'create':
+      return convertCreateCommand(cmd, sceneManager, hooks)
+    case 'delete':
+      return convertDeleteCommand(cmd, sceneManager, hooks)
+    case 'add_model':
+      return null
   }
 }

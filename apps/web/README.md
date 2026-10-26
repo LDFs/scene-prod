@@ -95,7 +95,7 @@ three.js 的三维坐标，y 轴向上，z轴朝外, x 轴向右。
 
 ### 修改指令
 修改模型时通过指令(`HistoryCommand`)记录修改的信息，方便回退
-修改模型材质，通过`MaterialObjectCommand`来记录修改的信息。
+修改模型材质，通过 `HandleActualCommand` 记录可撤销的属性修改；AI 使用统一的 `set_property` 指令。
 
 - 修改模型名称后，场景树同步显示，通过 treeVersion 来触发重新渲染。`<TreeNode v-for="obj in sceneObjects" :key="obj.id + '-' + treeVersion" ... />`
 `key` 变化后，会重新渲染，读取新的值

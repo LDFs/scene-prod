@@ -316,7 +316,14 @@ const onSlotDrop = async (event: DragEvent, slot: TextureSlotDef) => {
   const oldTexture = getTextureOf(mat, slot.key)
   if (oldTexture === texture) return
 
-  historyStore.execute(new MaterialMapCommand(object, mat, slot.key, oldTexture, texture))
+  // historyStore.execute(new MaterialMapCommand(object, mat, slot.key, oldTexture, texture))
+  historyStore.execute(new HandleActualCommand(oldTexture, texture, (value) => {
+    ;(mat as any)[slot.key] = value
+    // 贴图在有/无之间切换会改变着色器的 define，不重编译不会生效
+    mat.needsUpdate = true
+    // 持久化靠这个标记决定要不要 diff 这个网格的材质
+    object.userData.materialModified = true
+  }))
 }
 
 const clearSlot = (slot: TextureSlotDef) => {

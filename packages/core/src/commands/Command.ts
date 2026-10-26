@@ -20,7 +20,3 @@ export interface DeleteCommand extends Command {
 export interface TransformCommand extends Command {
   execute(): void
 }
-
-export interface MaterialCommand extends Command {
-  execute(): void
-}

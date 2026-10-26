@@ -4,7 +4,7 @@
     <PropertiesPanel v-if="activeTab === 'properties'" />
     <MaterialPanel v-if="activeTab === 'material'" />
     <SceneSettingPanel v-if="activeTab === 'settings'" />
-    <ChatPanel v-if="activeTab === 'chat'" />
+    <ChatPanel v-show="activeTab === 'chat'" />
   </aside>
 </template>
 
